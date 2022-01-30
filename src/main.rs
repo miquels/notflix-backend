@@ -2,6 +2,9 @@
 extern crate diesel;
 
 mod db;
+mod genres;
+mod nfo;
+mod parsefilename;
 
 type Result<T, E = Box<dyn std::error::Error + 'static>> = std::result::Result<T, E>;
 
