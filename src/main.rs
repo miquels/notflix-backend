@@ -1,15 +1,7 @@
-#[macro_use]
-extern crate diesel;
-
-mod db;
-mod genres;
-mod nfo;
-mod parsefilename;
-
-type Result<T, E = Box<dyn std::error::Error + 'static>> = std::result::Result<T, E>;
+use notflix_backend::db;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> anyhow::Result<()> {
     let handle = db::connect_db("test.db").await?;
 
     let items = db::get_items(&handle).await;
