@@ -5,11 +5,12 @@ use regex::Regex;
 use url::Url;
 
 mod movies;
-// mod series;
+mod shows;
 
 pub use movies::{build_movie, build_movies};
-// pub use shows::build_shows;
+pub use shows::{build_show, build_shows};
 
+// Helper macro.
 macro_rules! def_regex {
     ($name:ident => $re:expr) => {
         pub static $name: Lazy<Regex> = Lazy::new(|| Regex::new($re).unwrap());
@@ -25,6 +26,7 @@ def_regex!(IS_EXT1 => r#"^(.*)()\.(png|jpg|jpeg|tbn|nfo|srt)$"#);
 def_regex!(IS_EXT2 => r#"^(.*)[.-]([a-z]+)\.(png|jpg|jpeg|tbn|nfo|srt)$"#);
 def_regex!(IS_YEAR => r#" \(([0-9]+)\)$"#);
 
+/// URL escape a path - relative or absolute.
 pub fn escape_path(p: &str) -> String {
     if p.starts_with("/") {
         let u = Url::from_file_path(p).unwrap();
@@ -35,6 +37,7 @@ pub fn escape_path(p: &str) -> String {
     }
 }
 
+/// Like the name says :)
 pub fn join_and_escape_path(subdir: Option<&str>, name: &str) -> String {
     match subdir {
         Some(d) => escape_path(&format!("{}/{}", d, name)),
@@ -42,6 +45,7 @@ pub fn join_and_escape_path(subdir: Option<&str>, name: &str) -> String {
     }
 }
 
+/// Common function.
 pub fn systemtime_to_ms(tm: SystemTime) -> u64 {
     tm.duration_since(SystemTime::UNIX_EPOCH).map(|t| t.as_millis()).unwrap_or(0) as u64
 }
