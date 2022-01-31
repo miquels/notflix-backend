@@ -39,6 +39,7 @@ impl Item {
     async fn build_movie(coll: &Collection, name: &str) -> Option<Item> {
         let mut dirname = PathBuf::from(&coll.directory);
         dirname.push(name);
+        println!("XXX {}/{} -> {:?}", coll.directory, name, dirname);
 
         let mut d = match fs::read_dir(&dirname).await {
             Ok(d) => d,
@@ -141,9 +142,16 @@ impl Item {
             }
 
             if ext == "nfo" {
-                movie.nfo_path = PathBuf::from(&coll.directory);
-                movie.nfo_path.push(&dirname);
-                movie.nfo_path.push(name);
+                let mut nfo_path = PathBuf::from(&coll.directory);
+                nfo_path.push(&dirname);
+                nfo_path.push(name);
+                if let Ok(mut file) = fs::File::open(&nfo_path).await {
+                    match crate::nfo::read(&mut file).await {
+                        Ok(nfo) => movie.nfo = Some(nfo),
+                        Err(e) => println!("error reading nfo: {}", e),
+                    }
+                }
+                movie.nfo_path = Some(nfo_path);
             }
         }
 

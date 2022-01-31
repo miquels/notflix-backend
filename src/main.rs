@@ -25,15 +25,19 @@ pub enum Command {
     #[structopt(display_order = 2)]
     /// Dump database
     DumpDb(DumpDbOpts),
+
+    #[structopt(display_order = 3)]
+    /// Read NFO
+    ReadNfo(ReadNfoOpts),
 }
 
 #[derive(StructOpt, Debug)]
 pub struct ScanDirOpts {
-    #[structopt(short, long)]
+    #[structopt(long)]
     /// Scan movie directory.
     pub movie: bool,
 
-    #[structopt(short, long)]
+    #[structopt(long)]
     /// Scan movie directories.
     pub movies: bool,
 
@@ -47,12 +51,19 @@ pub struct DumpDbOpts {
     pub database:  String,
 }
 
+#[derive(StructOpt, Debug)]
+pub struct ReadNfoOpts {
+    /// NFO name.
+    pub filename:  String,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let opts = MainOpts::from_args();
     match opts.cmd {
         Command::ScanDir(opts) => return scandir(opts).await,
         Command::DumpDb(opts) => return dumpdb(opts).await,
+        Command::ReadNfo(opts) => return readnfo(opts).await,
     }
 }
 
@@ -91,5 +102,9 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
     Ok(())
 }
 
-
-
+async fn readnfo(opts: ReadNfoOpts) -> anyhow::Result<()> {
+    let mut file = tokio::fs::File::open(&opts.filename).await?;
+    let items = notflix_backend::nfo::read(&mut file).await?;
+    println!("{}", serde_json::to_string_pretty(&items)?);
+    Ok(())
+}

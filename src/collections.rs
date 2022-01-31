@@ -48,7 +48,7 @@ pub struct Item {
     pub seasons: Vec<Season>,
 
     #[serde(skip)]
-    pub nfo_path: PathBuf,
+    pub nfo_path: Option<PathBuf>,
     #[serde(skip)]
     pub nfo_time: u64,
 }
@@ -77,7 +77,7 @@ pub struct Episode {
     #[serde(skip)]
     pub basename: String,
     #[serde(skip)]
-    pub nfo_path: String,
+    pub nfo_path: Option<PathBuf>,
     #[serde(skip)]
     pub nfo_time: u64,
     #[serde(skip)]
