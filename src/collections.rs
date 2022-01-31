@@ -1,11 +1,12 @@
-use crate::nfo::Nfo;
-
+use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+
+use crate::nfo::Nfo;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Collection {
     pub name: String,
-    pub type_: String,
+    pub type_: &'static str,
     pub items: Vec<Item>,
     pub directory: String,
     pub baseurl: String,
@@ -21,7 +22,7 @@ pub struct Item {
     pub name:   String,
     pub path:   String,
     pub baseurl: String,
-    pub type_: String,
+    pub type_: &'static str,
     pub firstvideo: u64,
     pub lastvideo: u64,
     pub sortname: Option<String>,
@@ -47,7 +48,7 @@ pub struct Item {
     pub seasons: Vec<Season>,
 
     #[serde(skip)]
-    pub nfo_path: String,
+    pub nfo_path: PathBuf,
     #[serde(skip)]
     pub nfo_time: u64,
 }
