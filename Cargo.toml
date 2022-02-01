@@ -13,6 +13,8 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0"
+axum-server = "0.3.3"
+axum = "0.3"
 async-recursion = "1.0"
 bb8 = "0.7.1"
 bb8-diesel = "0.2.1"
