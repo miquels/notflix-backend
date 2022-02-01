@@ -2,6 +2,7 @@ use clap;
 use structopt::StructOpt;
 
 use notflix_backend::collections;
+use notflix_backend::config;
 use notflix_backend::db;
 use notflix_backend::kodifs;
 use notflix_backend::server;
@@ -38,8 +39,9 @@ pub enum Command {
 
 #[derive(StructOpt, Debug)]
 pub struct ServeOpts {
-    /// Port.
-    pub port: u16,
+    #[structopt(short, long)]
+    /// Configuration file.
+    pub config: String,
 }
 
 #[derive(StructOpt, Debug)]
@@ -88,7 +90,9 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn serve(opts: ServeOpts) -> anyhow::Result<()> {
-    server::serve(opts.port).await
+    let cfg = config::from_file(&opts.config)?;
+    let handle = db::connect_db(&cfg.server.database).await?;
+    server::serve(cfg, handle).await
 }
 
 async fn dumpdb(opts: DumpDbOpts) -> anyhow::Result<()> {
@@ -102,7 +106,7 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
     if opts.movie || opts.movies {
         let mut coll = collections::Collection {
             name: "Movies".to_string(),
-            type_: "movies",
+            type_: "movies".to_string(),
             directory: opts.directory.clone(),
             baseurl: "/".to_string(),
             ..collections::Collection::default()
@@ -128,7 +132,7 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
     if opts.tvshow || opts.tvshows {
         let mut coll = collections::Collection {
             name: "TV Shows".to_string(),
-            type_: "shows",
+            type_: "shows".to_string(),
             directory: opts.directory.clone(),
             baseurl: "/".to_string(),
             ..collections::Collection::default()

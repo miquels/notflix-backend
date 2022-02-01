@@ -86,7 +86,7 @@ impl Item {
             video: escape_path(&video),
             firstvideo: systemtime_to_ms(created),
             lastvideo: systemtime_to_ms(created),
-            type_: "movie",
+            type_: "movie".to_string(),
             ..Item::default()
         };
 

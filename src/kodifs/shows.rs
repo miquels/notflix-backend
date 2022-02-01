@@ -309,7 +309,7 @@ impl Item {
             name: dir.split('/').last().unwrap().to_string(),
             baseurl: coll.baseurl.clone(),
             path: escape_path(dir),
-            type_: "show",
+            type_: "show".to_string(),
             ..Item::default()
         };
         let mut ep_map = HashMap::new();

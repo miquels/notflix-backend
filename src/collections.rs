@@ -21,14 +21,19 @@ impl IsEmpty for Vec<String> {
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Collection {
+    #[serde(rename(deserialize = "__label__"))]
     pub name: String,
-    #[serde(rename = "type")]
-    pub type_: &'static str,
-    pub items: Vec<Item>,
-    pub directory: String,
-    pub baseurl: String,
 
-    #[serde(skip)]
+    #[serde(rename = "type")]
+    pub type_: String,
+
+    #[serde(skip_serializing)]
+    pub directory: String,
+    #[serde(default, skip)]
+    pub items: Vec<Item>,
+    #[serde(default, skip)]
+    pub baseurl: String,
+    #[serde(default, skip)]
     pub source_id: u32,
 }
 
@@ -40,7 +45,7 @@ pub struct Item {
     pub path:   String,
     pub baseurl: String,
     #[serde(rename = "type")]
-    pub type_: &'static str,
+    pub type_: String,
     pub firstvideo: u64,
     pub lastvideo: u64,
     #[serde(skip_serializing_if = "Option::empty")]
