@@ -6,6 +6,7 @@ use tokio::fs;
 use crate::collections::*;
 use super::*;
 
+#[derive(Debug)]
 struct EpMap {
     season_idx: usize,
     episode_idx: usize,
@@ -58,20 +59,19 @@ impl Item {
             }
         }
 
-        // not present yet. figure out where to insert a new season with this seasonno.
-        let mut idx = 0;
-        while idx < self.seasons.len() {
-            if seasonno < self.seasons[idx].seasonno {
-                break;
-            }
-            idx += 1;
-        }
-
-        // insert the fresh season at 'idx'.
+        // not present yet, so add.
         let sn = Season { seasonno, ..Season::default() };
-        self.seasons.insert(idx, sn);
+        self.seasons.push(sn);
 
-        idx
+        self.seasons.len() - 1
+    }
+
+    fn get_episode(&self, season_idx: usize, episode_idx: usize) -> &Episode {
+        &self.seasons[season_idx].episodes[episode_idx]
+    }
+
+    fn get_episode_mut(&mut self, season_idx: usize, episode_idx: usize) -> &mut Episode {
+        &mut self.seasons[season_idx].episodes[episode_idx]
     }
 
     // This function scans a directory for tv show information.
@@ -93,6 +93,7 @@ impl Item {
         while let Ok(Some(entry)) = d.next_entry().await {
             entries.push(entry);
         }
+        entries.sort_by_key(|e| e.file_name());
 
         for entry in &entries {
 
@@ -191,6 +192,25 @@ impl Item {
 
                 if let Some(ep_info) = EpisodeNameInfo::parse(&s[1], season_hint) {
 
+                    // Is it a double entry? (dup mp4s in different dirs)
+                    if let Some(epm) = ep_map.get(&s[1]) {
+
+                        // If it already has related files, dont overwrite.
+                        let ep = self.get_episode(epm.season_idx, epm.episode_idx);
+                        if ep.nfo.is_some() || ep.thumb.is_some() {
+                            continue;
+                        }
+
+                        // Or, if we are in the wrong dir, ignore.
+                        if Some(ep_info.seasonno) != season_hint {
+                            continue;
+                        }
+
+                        // OK, replace.
+                        self.seasons[epm.season_idx].episodes.remove(epm.episode_idx);
+                        ep_map.remove(&s[1]);
+                    }
+
                     // Add info from the filename.
                     ep.name = ep_info.name;
                     ep.seasonno = ep_info.seasonno;
@@ -239,10 +259,10 @@ impl Item {
                 None => continue,
             };
 
+            let ep = self.get_episode_mut(season_idx, episode_idx);
             let p = join_and_escape_path(subdir, name);
-            let ep = &mut self.seasons[season_idx].episodes[episode_idx];
 
-            if IS_IMAGE.is_match(&ext) {
+            if IS_IMAGE.is_match(&name) {
                 if ext == "tbn" || aux == "thumb" {
                     ep.thumb = Some(p);
                 }
@@ -341,7 +361,7 @@ impl Item {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct EpisodeNameInfo {
     name: String,
     seasonno: u32,
@@ -372,7 +392,7 @@ impl EpisodeNameInfo {
         }
 
         // pattern: ___.s03e04e05.___ or ___.s03e04-e05.___
-        const PAT2: &'static str = r#"^.*[. _[sS]([0-9]+)[eE]([0-9]+)-?[eE]([0-9]+)[. _].*$"#;
+        const PAT2: &'static str = r#"^.*[. _][sS]([0-9]+)[eE]([0-9]+)-?[eE]([0-9]+)[. _].*$"#;
         if let Some(caps) = regex!(PAT2).captures(name) {
             ep.name = format!("{}x{}-{}", &caps[1], &caps[2], &caps[3]);
             ep.seasonno = caps[1].parse::<u32>().unwrap_or(0);

@@ -4,6 +4,7 @@ use structopt::StructOpt;
 use notflix_backend::collections;
 use notflix_backend::db;
 use notflix_backend::kodifs;
+use notflix_backend::server;
 
 #[derive(StructOpt, Debug)]
 #[structopt(setting = clap::AppSettings::VersionlessSubcommands)]
@@ -19,16 +20,26 @@ pub struct MainOpts {
 #[structopt(rename_all = "kebab-case")]
 pub enum Command {
     #[structopt(display_order = 1)]
+    /// Serve http(s)
+    Serve(ServeOpts),
+
+    #[structopt(display_order = 2)]
     /// Scan directory.
     ScanDir(ScanDirOpts),
 
-    #[structopt(display_order = 2)]
+    #[structopt(display_order = 3)]
     /// Dump database
     DumpDb(DumpDbOpts),
 
-    #[structopt(display_order = 3)]
+    #[structopt(display_order = 4)]
     /// Read NFO
     ReadNfo(ReadNfoOpts),
+}
+
+#[derive(StructOpt, Debug)]
+pub struct ServeOpts {
+    /// Port.
+    pub port: u16,
 }
 
 #[derive(StructOpt, Debug)]
@@ -40,6 +51,14 @@ pub struct ScanDirOpts {
     #[structopt(long)]
     /// Scan movie directories.
     pub movies: bool,
+
+    #[structopt(long)]
+    /// Scan tvshow directory.
+    pub tvshow: bool,
+
+    #[structopt(long)]
+    /// Scan tvshow directories.
+    pub tvshows: bool,
 
     /// Directory name.
     pub directory:  String,
@@ -61,10 +80,15 @@ pub struct ReadNfoOpts {
 async fn main() -> anyhow::Result<()> {
     let opts = MainOpts::from_args();
     match opts.cmd {
+        Command::Serve(opts) => return serve(opts).await,
         Command::ScanDir(opts) => return scandir(opts).await,
         Command::DumpDb(opts) => return dumpdb(opts).await,
         Command::ReadNfo(opts) => return readnfo(opts).await,
     }
+}
+
+async fn serve(opts: ServeOpts) -> anyhow::Result<()> {
+    server::serve(opts.port).await
 }
 
 async fn dumpdb(opts: DumpDbOpts) -> anyhow::Result<()> {
@@ -75,28 +99,56 @@ async fn dumpdb(opts: DumpDbOpts) -> anyhow::Result<()> {
 }
 
 async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
-    let mut coll = collections::Collection {
-        name: "Movies".to_string(),
-        type_: "movies",
-        directory: opts.directory.clone(),
-        baseurl: "/".to_string(),
-        ..collections::Collection::default()
-    };
-    if opts.movie {
-        let mut m = opts.directory.rsplitn(2, '/');
-        let file_name = m.next().unwrap();
-        coll.directory = m.next().unwrap_or(".").to_string();
+    if opts.movie || opts.movies {
+        let mut coll = collections::Collection {
+            name: "Movies".to_string(),
+            type_: "movies",
+            directory: opts.directory.clone(),
+            baseurl: "/".to_string(),
+            ..collections::Collection::default()
+        };
+        if opts.movie {
+            let mut m = opts.directory.rsplitn(2, '/');
+            let file_name = m.next().unwrap();
+            coll.directory = m.next().unwrap_or(".").to_string();
 
-        match kodifs::build_movie(&mut coll, file_name).await {
-            Some(item) => println!("{}", serde_json::to_string_pretty(&item)?),
-            None => println!("no movie found"),
+            match kodifs::build_movie(&mut coll, file_name).await {
+                Some(item) => println!("{}", serde_json::to_string_pretty(&item)?),
+                None => println!("no movie found"),
+            }
+        }
+        if opts.movies {
+            kodifs::build_movies(&mut coll, 0).await;
+            match coll.items.len() {
+                0 => println!("no movies found"),
+                _ => println!("{}", serde_json::to_string_pretty(&coll.items)?),
+            }
         }
     }
-    if opts.movies {
-        kodifs::build_movies(&mut coll, 0).await;
-        match coll.items.len() {
-            0 => println!("no movies found"),
-            _ => println!("{}", serde_json::to_string_pretty(&coll.items)?),
+    if opts.tvshow || opts.tvshows {
+        let mut coll = collections::Collection {
+            name: "TV Shows".to_string(),
+            type_: "shows",
+            directory: opts.directory.clone(),
+            baseurl: "/".to_string(),
+            ..collections::Collection::default()
+        };
+        if opts.tvshow {
+            let mut m = opts.directory.rsplitn(2, '/');
+            let file_name = m.next().unwrap();
+            coll.directory = m.next().unwrap_or(".").to_string();
+
+            match kodifs::build_show(&mut coll, file_name).await {
+                Some(item) => println!("{}", serde_json::to_string_pretty(&item)?),
+                None => println!("no show found"),
+            }
+        }
+        if opts.tvshows {
+            kodifs::build_shows(&mut coll, 0).await;
+            match coll.items.len() {
+                0 => println!("no shows found"),
+                _ => println!("{}", serde_json::to_string_pretty(&coll.items)?),
+            }
         }
     }
     Ok(())
