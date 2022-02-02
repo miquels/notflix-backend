@@ -5,7 +5,7 @@ PRAGMA foreign_keys = ON;
 -- * unless this collection is empty (no items), then delete it.
 -- if at startup this section in the config is not in the database, insert it.
 CREATE TABLE collections(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
   type TEXT NOT NULL,
   directory TEXT NOT NULL,
@@ -13,8 +13,8 @@ CREATE TABLE collections(
 
 -- movie or series.
 CREATE TABLE items(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  collection_id INTEGER NOT NULL,
+  id INTEGER PRIMARY KEY,
+  collection_id BIGINT NOT NULL,
   deleted INTEGER DEFAULT 0 NOT NULL,
 
   -- data for the thumb wall
@@ -38,8 +38,8 @@ CREATE TABLE items(
 -- external IDs to internal ID mapping. This helps when an item
 -- is renamed, or removed and later restored.
 CREATE TABLE uniqueid(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  item_id INTEGER NOT NULL,
+  id INTEGER PRIMARY KEY,
+  item_id BIGINT NOT NULL,
   -- imdb, tvdb, etc
   ext_name TEXT NOT NULL,
   -- id as defined by imdb, tvdb, etc
@@ -50,15 +50,15 @@ CREATE TABLE uniqueid(
 
 -- user.
 CREATE TABLE users(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id INTEGER PRIMARY KEY,
   username TEXT NOT NULL,
 );
 
 -- movie or tv series marked as favorite.
 CREATE TABLE favorites(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT_NULL,
-  item_id INTEGER NOT NULL,
+  id INTEGER PRIMARY KEY,
+  user_id BIGINT NOT_NULL,
+  item_id BIGINT NOT NULL,
 
   FOREIGN KEY(user_id) REFERENCES users(id),
   FOREIGN KEY(item_id) REFERENCES items(id)
@@ -66,12 +66,12 @@ CREATE TABLE favorites(
 
 -- Which items we've (partly) seen.
 CREATE TABLE seen(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  item_id INTEGER NOT NULL,
+  id INTEGER PRIMARY KEY,
+  item_id BIGINT NOT NULL,
   season INTEGER,
   episode INTEGER,
   paused_at INTEGER,
-  ended integer DEFAULT FALSE NOT NULL,
+  ended INTEGER DEFAULT FALSE NOT NULL,
   lastupdate BIGINT NOT NULL,
 
   FOREIGN KEY(item_id) REFERENCES items(id)
@@ -80,7 +80,7 @@ CREATE TABLE seen(
 -- Our image resizing service.
 -- first the original images.
 CREATE TABLE images(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id INTEGER PRIMARY KEY,
   ino BIGINT NOT NULL,
   dev BIGINT NOT NULL,
   size BIGINT NOT NULL,
@@ -92,7 +92,7 @@ CREATE INDEX images_idx ON images(ino, dev, size, mtime);
 
 -- then the resized images.
 CREATE TABLE rsimages(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id INTEGER PRIMARY KEY,
   image_id INTEGER NOT NULL,
   width INTEGER NOT NULL,
   height INTEGER NOT NULL,
