@@ -1,3 +1,5 @@
 /target
 *.db
 notflix-backend.cfg
+.env
+migrations
