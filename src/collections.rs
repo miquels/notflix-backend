@@ -27,14 +27,16 @@ pub struct Collection {
     #[serde(rename = "type")]
     pub type_: String,
 
+    #[serde(rename="collection-id")]
+    pub collection_id: u32,
+
     #[serde(skip_serializing)]
     pub directory: String,
+
     #[serde(default, skip)]
     pub items: Vec<Item>,
     #[serde(default, skip)]
     pub baseurl: String,
-    #[serde(default, skip)]
-    pub source_id: u32,
 }
 
 // An 'item' can be a movie, a tv-show, a folder, etc.

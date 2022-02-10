@@ -10,6 +10,7 @@ extern crate diesel_migrations;
 pub mod api;
 pub mod collections;
 pub mod config;
+pub mod data;
 pub mod db;
 pub mod genres;
 pub mod kodifs;
