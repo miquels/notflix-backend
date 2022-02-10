@@ -1,12 +1,10 @@
 use std::io;
-use std::net::SocketAddr;
 
 use anyhow::Result;
 use axum::{body, response::Response, Router, routing::get};
-use axum::extract::{ConnectInfo, Extension, Path};
+use axum::extract::{Extension, Path};
 use headers::{HeaderMapExt, UserAgent};
 use http::{Request, StatusCode};
-use http_body::Body as _;
 
 use mp4lib::streaming::http_handler::{self, FsPath};
 
@@ -15,39 +13,21 @@ use crate::server::SharedState;
 async fn handle_request(
     Path((coll, path)): Path<(u32, String)>,
     Extension(state): Extension<SharedState>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     req: Request<body::Body>,
 ) -> Result<Response, StatusCode> {
+
+    // Lose the request body.
     let (parts, _) = req.into_parts();
     let req = Request::from_parts(parts, ());
-    let start = std::time::Instant::now();
 
+    // Find collection.
     let coll = match state.config.collections.iter().find(|c| c.collection_id == coll) {
         Some(coll) => coll,
         None => return Err(StatusCode::NOT_FOUND),
     };
 
-    let res = handle_request2(&path, &coll.directory, &req).await.map_err(|e| translate_io_error(e));
-
-    let now = time::OffsetDateTime::now_local().unwrap_or(time::OffsetDateTime::now_utc());
-    let (size, status) = match res.as_ref() {
-        Ok(resp) => (resp.body().size_hint().exact().unwrap_or(0), resp.status()),
-        Err(sc) => (0, *sc),
-    };
-    let pnq = req.uri().path_and_query().map(|p| p.to_string()).unwrap_or(String::from("-"));
-    println!(
-        "{} {} \"{} {} {:?}\" {} {} {:?}",
-        now,
-        addr,
-        req.method(),
-        pnq,
-        req.version(),
-        status.as_u16(),
-        size,
-        start.elapsed(),
-    );
-
-    res
+    // Handle request.
+    handle_request2(&path, &coll.directory, &req).await.map_err(|e| translate_io_error(e))
 }
 
 async fn handle_request2(

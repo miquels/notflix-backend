@@ -23,6 +23,7 @@ clap = "2.33"
 curlyconf = "0.1.0"
 diesel = { version = "1.4.4", features = ["sqlite"] }
 diesel_migrations = "1.4.0"
+futures-core = "0.3.21"
 headers = "0.3"
 http = "0.2"
 http-body = "0.4.4"
