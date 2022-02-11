@@ -1,16 +1,20 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
+
+use arc_swap::ArcSwap;
 use tokio::fs;
 
 use crate::collections::*;
 use super::*;
 
-pub async fn build_movies(coll: &mut Collection, pace: u32) {
+pub async fn build_movies(coll: &Collection, pace: u32) {
 
     let mut d = match fs::read_dir(&coll.directory).await {
         Ok(d) => d,
         Err(_) => return,
     };
+    let mut items = Vec::new();
 
     while let Ok(Some(entry)) = d.next_entry().await {
         let file_name = entry.file_name();
@@ -22,24 +26,26 @@ pub async fn build_movies(coll: &mut Collection, pace: u32) {
             continue;
         }
 
-        if let Some(m) = Item::build_movie(coll, name).await {
-            coll.items.push(m);
+        if let Some(m) = Item::build_movie(coll, name, false).await {
+            items.push(ArcSwap::new(Arc::new(m)));
         }
         if pace > 0 {
             tokio::time::sleep(Duration::from_secs(pace as u64)).await;
         }
     }
+
+    *coll.items.lock().unwrap() = items;
 }
 
 pub async fn build_movie(coll: &Collection, name: &str) -> Option<Item> {
-    Item::build_movie(coll, name).await
+    Item::build_movie(coll, name, true).await
 }
 
 impl Item {
-    async fn build_movie(coll: &Collection, name: &str) -> Option<Item> {
+    async fn build_movie(coll: &Collection, name: &str, parse_nfo: bool) -> Option<Item> {
         let mut dirname = PathBuf::from(&coll.directory);
         dirname.push(name);
-        println!("XXX {}/{} -> {:?}", coll.directory, name, dirname);
+        // println!("XXX {}/{} -> {:?}", coll.directory, name, dirname);
 
         let mut d = match fs::read_dir(&dirname).await {
             Ok(d) => d,
@@ -145,10 +151,12 @@ impl Item {
                 let mut nfo_path = PathBuf::from(&coll.directory);
                 nfo_path.push(&dirname);
                 nfo_path.push(name);
-                if let Ok(mut file) = fs::File::open(&nfo_path).await {
-                    match crate::nfo::read(&mut file).await {
-                        Ok(nfo) => movie.nfo = Some(nfo),
-                        Err(e) => println!("error reading nfo: {}", e),
+                if parse_nfo {
+                    if let Ok(mut file) = fs::File::open(&nfo_path).await {
+                        match crate::nfo::read(&mut file).await {
+                            Ok(nfo) => movie.nfo = Some(nfo),
+                            Err(e) => println!("error reading nfo: {}", e),
+                        }
                     }
                 }
                 movie.nfo_path = Some(nfo_path);

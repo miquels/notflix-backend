@@ -1,6 +1,10 @@
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+use arc_swap::ArcSwap;
 use serde::{Deserialize, Serialize};
 
+use crate::kodifs;
 use crate::nfo::Nfo;
 
 trait IsEmpty {
@@ -34,9 +38,84 @@ pub struct Collection {
     pub directory: String,
 
     #[serde(default, skip)]
-    pub items: Vec<Item>,
+    pub items: Mutex<Vec<ArcSwap<Item>>>,
+
     #[serde(default, skip)]
     pub baseurl: String,
+}
+
+impl Collection {
+
+    /// Scan directory of this collection and update items.
+    pub async fn scan(&self) {
+        // FIXME: use enum
+        match self.type_.as_str() {
+            "movies" => {
+                println!("scanning collection {}: movies", self.collection_id);
+                kodifs::build_movies(self, 0).await;
+            },
+            "shows" | "series" => {
+                println!("scanning collection {}: series", self.collection_id);
+                kodifs::build_shows(self, 0).await;
+            },
+            other => {
+                println!("skipping collection {}: unknown type {}", self.collection_id, other);
+            },
+        }
+    }
+
+    /// Get a shallow list of all items (no nfo info, no seasons / episode info).
+    pub async fn get_items(&self) -> Vec<Item> {
+        self.items.lock().unwrap().iter().map(|i| i.load().shallow_clone()).collect()
+    }
+
+    /// Get item details.
+    pub async fn get_item(&self, name: &str) -> Option<Arc<Item>> {
+        // Find item.
+        let item = self.items.lock().unwrap().iter().map(|i| i.load()).find(|i| i.name == name)?;
+
+        println!("XXX 1");
+
+        // Needs a full rescan if there are still nfo files that we haven't
+        // parsed yet. FIXME: use timestamps or something.
+        let need_update = match self.type_.as_str() {
+            "movies" => item.nfo_path.is_some() && item.nfo.is_none(),
+            "shows" | "series" => {
+                item
+                .seasons
+                .iter()
+                .any(|s| s.episodes.iter().any(|e| e.nfo_path.is_some() && e.nfo.is_none()))
+            }
+            _ => return None,
+        };
+
+        println!("XXX 2 need update {:?}", need_update);
+
+        if !need_update {
+            return Some(item.clone());
+        }
+
+        // Try to update.
+        println!("XXX 3 {} {} {}", self.directory, name, self.type_);
+
+        let new_item = Arc::new(match self.type_.as_str() {
+            "movies" => kodifs::build_movie(self, &name).await?,
+            "shows" | "series" => kodifs::build_show(self, &name).await?,
+            _ => return None,
+        });
+
+        println!("XXX 4 {:?}", new_item);
+
+        // Store updated item.
+        let items = self.items.lock().unwrap();
+        for item in items.iter() {
+            if item.load().name == new_item.name {
+                item.store(new_item.clone());
+                return Some(new_item);
+            }
+        }
+        None
+    }
 }
 
 // An 'item' can be a movie, a tv-show, a folder, etc.
@@ -92,6 +171,32 @@ pub struct Item {
     pub nfo_path: Option<PathBuf>,
     #[serde(skip)]
     pub nfo_time: u64,
+}
+
+impl Item {
+    pub fn shallow_clone(&self) -> Item {
+        Item {
+            name: self.name.clone(),
+            path: self.path.clone(),
+            baseurl: self.baseurl.clone(),
+            type_: self.type_.clone(),
+            firstvideo: self.firstvideo,
+            lastvideo: self.lastvideo,
+            sortname: self.sortname.clone(),
+            banner: self.banner.clone(),
+            folder: self.folder.clone(),
+            poster: self.poster.clone(),
+            rating: self.rating.clone(),
+            votes: self.votes.clone(),
+            genre: self.genre.clone(),
+            year: self.year.clone(),
+            thumb: self.thumb.clone(),
+            season_all_banner: self.season_all_banner.clone(),
+            season_all_poster: self.season_all_poster.clone(),
+            season_all_fanart: self.season_all_fanart.clone(),
+            ..Item::default()
+        }
+    }
 }
 
 fn is_false(val: &bool) -> bool {

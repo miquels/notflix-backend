@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use std::time::Duration;
 use std::path::PathBuf;
+use std::sync::Arc;
+
+use arc_swap::ArcSwap;
 use tokio::fs;
 
 use crate::collections::*;
@@ -12,7 +15,7 @@ struct EpMap {
     episode_idx: usize,
 }
 
-pub async fn build_shows(coll: &mut Collection, pace: u32) {
+pub async fn build_shows(coll: &Collection, pace: u32) {
 
     let mut d = match fs::read_dir(&coll.directory).await {
         Ok(d) => d,
@@ -31,7 +34,7 @@ pub async fn build_shows(coll: &mut Collection, pace: u32) {
         }
 
         if let Some(m) = Item::build_show(coll, name).await {
-            items.push(m);
+            items.push(ArcSwap::new(Arc::new(m)));
         }
         if pace > 0 {
             tokio::time::sleep(Duration::from_secs(pace as u64)).await;
@@ -41,7 +44,7 @@ pub async fn build_shows(coll: &mut Collection, pace: u32) {
     // - use unique_id
     // - if show is gone, mark as deleted, don't really delete
     //   (that will allow it to be restored later)
-    coll.items = items;
+    *coll.items.lock().unwrap() = items;
 }
 
 pub async fn build_show(coll: &Collection, name: &str) -> Option<Item> {

@@ -91,6 +91,12 @@ async fn main() -> anyhow::Result<()> {
 
 async fn serve(opts: ServeOpts) -> anyhow::Result<()> {
     let cfg = config::from_file(&opts.config)?;
+
+    // FIXME: move somewhere else.
+    for coll in &cfg.collections {
+        coll.scan().await;
+    }
+
     let handle = db::connect_db(&cfg.server.database).await?;
     server::serve(cfg, handle).await
 }
@@ -122,10 +128,11 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
             }
         }
         if opts.movies {
-            kodifs::build_movies(&mut coll, 0).await;
-            match coll.items.len() {
+            kodifs::build_movies(&coll, 0).await;
+            let items = coll.get_items().await;
+            match items.len() {
                 0 => println!("no movies found"),
-                _ => println!("{}", serde_json::to_string_pretty(&coll.items)?),
+                _ => println!("{}", serde_json::to_string_pretty(&items)?),
             }
         }
     }
@@ -148,10 +155,11 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
             }
         }
         if opts.tvshows {
-            kodifs::build_shows(&mut coll, 0).await;
-            match coll.items.len() {
+            kodifs::build_shows(&coll, 0).await;
+            let items = coll.get_items().await;
+            match items.len() {
                 0 => println!("no shows found"),
-                _ => println!("{}", serde_json::to_string_pretty(&coll.items)?),
+                _ => println!("{}", serde_json::to_string_pretty(&items)?),
             }
         }
     }

@@ -56,11 +56,15 @@ async fn get_items(
     Path(coll): Path<String>,
     Extension(state): Extension<SharedState>,
 ) -> Result<JsonResponse, StatusCode> {
-    state.config.collections
+    let coll = state
+        .config
+        .collections
         .iter()
-        .find(|c| coll == c.name)
-        .map(|c| to_json(&c.items))
-        .ok_or(StatusCode::NOT_FOUND)
+        .find(|c| coll == c.name);
+    match coll {
+        Some(coll) => Ok(to_json(&coll.get_items().await)),
+        None => Err(StatusCode::NOT_FOUND),
+    }
 }
 
 // /api/collection/:coll/item/:item
@@ -68,17 +72,20 @@ async fn get_item(
     Path((coll, item)): Path<(String, String)>,
     Extension(state): Extension<SharedState>,
 ) -> Result<JsonResponse, StatusCode> {
-    state.config.collections
+    let coll = state
+        .config
+        .collections
         .iter()
-        .find(|c| coll == c.name)
-        .map(|c| {
-            c.items
-                .iter()
-                .find(|i| i.name == item)
-                .map(|i| to_json(&i))
-        })
-        .flatten()
-        .ok_or(StatusCode::NOT_FOUND)
+        .find(|c| coll == c.name);
+    println!("get_item: coll: {:?}", coll.map(|c| &c.name));
+
+    if let Some(coll) = coll {
+        println!("get_item: {}", item);
+        if let Some(item) = coll.get_item(&item).await {
+            return  Ok(to_json(&*item));
+        }
+    }
+    Err(StatusCode::NOT_FOUND)
 }
 
 pub fn routes() -> Router {
