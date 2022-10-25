@@ -16,11 +16,17 @@ CREATE TABLE collections(
 CREATE TABLE mediaitems (
   id integer PRIMARY KEY AUTOINCREMENT,
   collection_id INTEGER NOT NULL,
-  path VARCHAR(255) NOT NULL,
+  path VARCHAR(255),
   deleted INTEGER DEFAULT 0 NOT NULL,
   type VARCHAR(20) NOT NULL,
   title VARCHAR(255) NOT NULL,
-  lastmodified BIGINT NOT NULL
+  plot TEXT,
+  tagline TEXT,
+  dateadded TEXT,
+  rating JSON NOT NULL DEFAULT "null",
+  thumb JSON NOT NULL DEFAULT "null",
+  fanart JSON NOT NULL DEFAULT "null",
+  uniqueid JSON NOT NULL DEFAULT "null"
 );
 
 -- Extra info for thumbwalls.
@@ -48,12 +54,20 @@ CREATE TABLE movies(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   mediaitem_id INTEGER NOT NULL,
 
-  -- movie
-  video varchar(255),
+  -- common to movies and tvshows
+  originaltitle TEXT,
+  sorttitle TEXT,
+  country JSON NOT NULL DEFAULT "null",
+  genre JSON NOT NULL DEFAULT "null",
+  studio JSON NOT NULL DEFAULT "null",
+  premiered TEXT,
+  mpaa TEXT,
 
-  -- details
-  nfodata VARCHAR(64000),
-  nfotime BIGINT,
+  -- movie
+  runtime INTEGER,
+  actors JSON NOT NULL DEFAULT "null",
+  credits JSON NOT NULL DEFAULT "null",
+  director JSON NOT NULL DEFAULT "null",
 
   FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
 );

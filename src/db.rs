@@ -19,26 +19,11 @@ pub struct Item {
 }
 
 pub async fn get_item(handle: &DbHandle, name: &str) -> Option<Item> {
-    sqlx::query_as!(
-        Item,
-        "
-    SELECT * from items where name = ?
-        ",
-        name
-    )
-    .fetch_one(handle)
-    .await
-    .ok()
+    None
 }
 
 pub async fn get_items(handle: &DbHandle) -> Result<Vec<Item>> {
-    let items = sqlx::query_as!(
-        Item,
-        "SELECT * from items",
-    )
-    .fetch_all(handle)
-    .await?;
-    Ok(items)
+    Ok(vec![])
 }
 
 pub async fn connect_db(db: &str) -> Result<DbHandle> {
