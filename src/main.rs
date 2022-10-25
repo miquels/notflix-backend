@@ -103,7 +103,7 @@ async fn serve(opts: ServeOpts) -> anyhow::Result<()> {
 
 async fn dumpdb(opts: DumpDbOpts) -> anyhow::Result<()> {
     let handle = db::connect_db(&opts.database).await?;
-    let items = db::get_items(&handle).await;
+    let items = db::get_items(&handle).await?;
     println!("{}", serde_json::to_string_pretty(&items)?);
     Ok(())
 }

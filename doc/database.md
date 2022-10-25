@@ -2,14 +2,23 @@
 
 See [database.sql](database.sql).
 
-## Movies / Shows
+## Movies / TV Series.
 
-We maintain a list of movies / tv-series in the database. The
-specific info stored is the minimum we need to:
+We maintain a list of movies / tv-series in the database. There is
+a base table for both movies and tv-series that contains the rows
+that the two have in common.
+
+Then there are extension tables, another common one is 'thumbwall'
+which contains the information to create a thumbwall (NOTE: can this
+not be built on-the-fly?)
+
+Specific info stored is the minimum we need to:
 
 - show the thumbs on the thumbwall
 - sort the thumbs
 - filter the thumbs
+
+(NOTE: can this not be built on-the-fly? ... yes it can)
 
 When more specific info for a tv show or movie is needed, we
 load it on demand from the filesystem (and LRU cache it in memory).
@@ -26,7 +35,7 @@ in a 'last-modified-since' sense.
 
 ## Users / Preferences / Seen
 
-Also kept in the database.
+Also kept in the database.)
 
 ## Image resizer.
 

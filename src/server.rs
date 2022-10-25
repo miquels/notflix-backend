@@ -2,14 +2,18 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use axum::{AddExtensionLayer, Router, routing::get};
-use axum::{body::Body, extract::ConnectInfo, response::Response};
+use axum::{Router, body::Body, response::Response, routing::get};
+use axum::extract::ConnectInfo;
 use futures_core::future::BoxFuture;
-use http_body::Body as _;
 use http::{Method, Request};
-use tower::{Service, ServiceBuilder, layer::layer_fn};
+use http_body::Body as _;
+use tower::{Service, ServiceBuilder};
 use tower_http::trace::TraceLayer;
 use tower_http::cors::{self, CorsLayer};
+use tower_http::compression::{
+    CompressionLayer,
+    predicate::{Predicate, NotForContentType, DefaultPredicate},
+};
 
 use crate::api;
 use crate::data;
@@ -28,15 +32,22 @@ pub async fn serve(cfg: Config, db: DbHandle) -> anyhow::Result<()> {
     let state = SharedState { db, config: Arc::new(cfg) };
     let addr = state.config.server.addrs[0];
 
+    let x_app = HeaderName::from_static("x-application");
+    let x_plb = HeaderName::from_static("x-playback-session-id");
+
+    let compress_predicate = DefaultPredicate::new()
+        .and(NotForContentType::const_new("movie/"))
+        .and(NotForContentType::const_new("audio/"));
+
     let middleware_stack = ServiceBuilder::new()
         .layer(TraceLayer::new_for_http())
-        .layer(layer_fn(|inner| Logger { inner }))
-        .layer(AddExtensionLayer::new(state))
+        // .layer(Extension(dir))
+        .layer(CompressionLayer::new().compress_when(compress_predicate))
         .layer(CorsLayer::new()
-            .allow_origin(cors::any())
+            .allow_origin(cors::AllowOrigin::mirror_request())
             .allow_methods(vec![Method::GET, Method::HEAD])
-            .allow_headers(vec![HeaderName::from_static("x-application"), ORIGIN, RANGE ])
-            .expose_headers(cors::any())
+            .allow_headers(vec![x_app, x_plb, ORIGIN, RANGE ])
+            .expose_headers(cors::Any)
             .max_age(std::time::Duration::from_secs(86400)));
 
     let app = Router::new()

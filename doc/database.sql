@@ -5,99 +5,155 @@ PRAGMA foreign_keys = ON;
 -- * unless this collection is empty (no items), then delete it.
 -- if at startup this section in the config is not in the database, insert it.
 CREATE TABLE collections(
-  id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL,
-  type TEXT NOT NULL,
-  directory TEXT NOT NULL,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name VARCHAR(255) NOT NULL,
+  type VARCHAR(16) NOT NULL,
+  directory TEXT NOT NULL
 );
 
--- movie or series.
-CREATE TABLE items(
-  id INTEGER PRIMARY KEY,
-  collection_id BIGINT NOT NULL,
+-- This is the base table for movies, tvseries, season, episodes.
+-- It contains info generic for any media type.
+CREATE TABLE mediaitems (
+  id integer PRIMARY KEY AUTOINCREMENT,
+  collection_id INTEGER NOT NULL,
+  path VARCHAR(255) NOT NULL,
   deleted INTEGER DEFAULT 0 NOT NULL,
+  type VARCHAR(20) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  lastmodified BIGINT NOT NULL
+);
 
-  -- data for the thumb wall
-  title TEXT NOT NULL,
-  path TEXT NOT NULL,
-  poster TEXT
+-- Extra info for thumbwalls.
+CREATE TABLE mediaitems_extra (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  mediaitem_id INTEGER NOT NULL,
 
   -- now the things we can sort on.
-  firstvideo BIGINT,
-  lastvideo BIGINT,
+  sorttitle VARCHAR(255) NOT NULL,
+  added BIGINT,
   year INTEGER,
   rating REAL,
+  votes REAL,
   genres TEXT,
 
-  -- need this for 'seen'.
-  lastupdate BIGINT NOT NULL,
+  -- and some images
+  poster INTEGER,
+  thumb INTEGER,
 
-  FOREIGN KEY(collection_id) REFERENCES collections(id)
+  FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
 );
 
--- external IDs to internal ID mapping. This helps when an item
--- is renamed, or removed and later restored.
-CREATE TABLE uniqueid(
-  id INTEGER PRIMARY KEY,
-  item_id BIGINT NOT NULL,
-  -- imdb, tvdb, etc
-  ext_name TEXT NOT NULL,
-  -- id as defined by imdb, tvdb, etc
-  ext_id TEXT NOT NULL,
 
-  FOREIGN KEY(item_id) REFERENCES items(id)
+CREATE TABLE movies(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  mediaitem_id INTEGER NOT NULL,
+
+  -- movie
+  video varchar(255),
+
+  -- details
+  nfodata VARCHAR(64000),
+  nfotime BIGINT,
+
+  FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
 );
 
--- user.
-CREATE TABLE users(
-  id INTEGER PRIMARY KEY,
-  username TEXT NOT NULL,
+CREATE TABLE tvseries(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  mediaitem_id INTEGER NOT NULL,
+
+  -- details
+  nfodata TEXT,
+  nfotime BIGINT,
+
+  FOREIGN KEY(id) REFERENCES mediaitems(id)
 );
 
--- movie or tv series marked as favorite.
-CREATE TABLE favorites(
-  id INTEGER PRIMARY KEY,
-  user_id BIGINT NOT_NULL,
-  item_id BIGINT NOT NULL,
+CREATE TABLE episode(
+  id CHAR(16) PRIMARY KEY NOT NULL,
+  tvseries_id CHAR(16) NOT NULL,
 
-  FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(item_id) REFERENCES items(id)
-);
+  -- video file
+  video TEXT,
 
--- Which items we've (partly) seen.
-CREATE TABLE seen(
-  id INTEGER PRIMARY KEY,
-  item_id BIGINT NOT NULL,
+  -- season/episode
   season INTEGER,
   episode INTEGER,
-  paused_at INTEGER,
-  ended INTEGER DEFAULT FALSE NOT NULL,
-  lastupdate BIGINT NOT NULL,
 
-  FOREIGN KEY(item_id) REFERENCES items(id)
+  -- details
+  nfodata TEXT,
+  nfotime BIGINT,
+
+  FOREIGN KEY(tvseries_id) REFERENCES mediaitems(id)
 );
 
--- Our image resizing service.
--- first the original images.
+-- The seasons table exists for season-specific info.
+-- For now, just images.
+CREATE TABLE seasons(
+  id CHAR(16) PRIMARY KEY NOT NULL,
+  tvseries_id CHAR(16) NULL,
+  season INTEGER,
+
+  FOREIGN KEY(tvseries_id) REFERENCES mediaitems(id)
+);
+
 CREATE TABLE images(
-  id INTEGER PRIMARY KEY,
-  ino BIGINT NOT NULL,
-  dev BIGINT NOT NULL,
-  size BIGINT NOT NULL,
-  mtime BIGINT NOT NULL,
-  width INTEGER NOT NULL,
-  height INTEGER NOT NULL
-);
-CREATE INDEX images_idx ON images(ino, dev, size, mtime);
+  id CHAR(16) PRIMARY KEY NOT NULL,
+  mediaitem_id INTEGER NOT NULL,
 
--- then the resized images.
-CREATE TABLE rsimages(
-  id INTEGER PRIMARY KEY,
-  image_id INTEGER NOT NULL,
-  width INTEGER NOT NULL,
-  height INTEGER NOT NULL,
-  quality INTEGER DEFAULT 100 NOT NULL,
-  path TEXT NOT NULL,
+  -- non-unique id (resized images have the same id).
+  image_id CHAR(16),
 
-  FOREIGN KEY(image_id) REFERENCES images(id)
+  -- art type (poster, thumb, fanart).
+  arttype TEXT NOT NULL,
+
+  -- dimensions
+  width NOT NULL,
+  height NOT NULL,
+
+  -- location, and inode/size to detect changes.
+  path TEXT,
+  inode BIGINT,
+  size INTEGER,
+
+  FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
 );
+CREATE INDEX idx_images_image_id ON images(image_id);
+
+CREATE TABLE uniqueids(
+  id CHAR(16) PRIMARY KEY NOT NULL,
+  mediaitem_id INTEGER NOT NULL,
+
+  -- type is imdb, or tvdb, etc
+  type TEXT NOT NULL,
+
+  -- uniqueid is a imdb-id, or tvdb-id, etc.
+  uniqueid TEXT NOT NULL,
+
+  -- default INTEGER DEFAULT 0 NOT NULL,
+
+  FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
+);
+
+CREATE TABLE actors_in_item(
+  id CHAR(16) PRIMARY KEY NOT NULL,
+  mediaitem_id INTEGER NOT NULL,
+
+  name TEXT NOT NULL,
+  role TEXT,
+  order_prio INTEGER,
+  thumb_id INTEGER,
+
+  FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
+);
+
+/*
+CREATE TABLE genres(
+);
+
+CREATE TABLE actors(
+);
+
+CREATE TABLE genres(
+);
+*/
