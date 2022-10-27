@@ -11,7 +11,7 @@ CREATE TABLE collections(
   directory TEXT NOT NULL
 );
 
--- This is the base table for movies, tvseries, season, episodes.
+-- This is the base table for movies, tvshows, season, episodes.
 -- It contains info generic for any media type.
 CREATE TABLE mediaitems (
   id integer PRIMARY KEY AUTOINCREMENT,
@@ -19,7 +19,7 @@ CREATE TABLE mediaitems (
   path VARCHAR(255),
   deleted INTEGER DEFAULT 0 NOT NULL,
   type VARCHAR(20) NOT NULL,
-  title VARCHAR(255) NOT NULL,
+  title VARCHAR(255),
   plot TEXT,
   tagline TEXT,
   dateadded TEXT,
@@ -62,61 +62,73 @@ CREATE TABLE movies(
   studio JSON NOT NULL DEFAULT "null",
   premiered TEXT,
   mpaa TEXT,
+  actors JSON NOT NULL DEFAULT "null",
 
   -- movie
   runtime INTEGER,
-  actors JSON NOT NULL DEFAULT "null",
   credits JSON NOT NULL DEFAULT "null",
   director JSON NOT NULL DEFAULT "null",
 
   FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
 );
 
-CREATE TABLE tvseries(
+CREATE TABLE tvshows(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   mediaitem_id INTEGER NOT NULL,
 
-  -- details
-  nfodata TEXT,
-  nfotime BIGINT,
+  -- common to movies and tvshows
+  originaltitle TEXT,
+  sorttitle TEXT,
+  country JSON NOT NULL DEFAULT "null",
+  genre JSON NOT NULL DEFAULT "null",
+  studio JSON NOT NULL DEFAULT "null",
+  premiered TEXT,
+  mpaa TEXT,
+  actors JSON NOT NULL DEFAULT "null",
+
+  -- tvshow
+  seasons INTEGER,
+  episodes INTEGER,
+  status TEXT,
 
   FOREIGN KEY(id) REFERENCES mediaitems(id)
 );
 
-CREATE TABLE episode(
-  id CHAR(16) PRIMARY KEY NOT NULL,
-  tvseries_id CHAR(16) NOT NULL,
+CREATE TABLE episodes(
+  id INTEGER PRIMARY KEY NOT NULL,
+  mediaitem_id INTEGER NOT NULL,
+  tvshow_id INTEGER NOT NULL,
 
-  -- video file
-  video TEXT,
-
-  -- season/episode
+ -- episode
+  aired TEXT,
+  runtime INTEGER,
   season INTEGER,
   episode INTEGER,
+  displayseason INTEGER,
+  displayepisode INTEGER,
+  actors JSON NOT NULL DEFAULT "null",
+  credits JSON NOT NULL DEFAULT "null",
+  director JSON NOT NULL DEFAULT "null",
 
-  -- details
-  nfodata TEXT,
-  nfotime BIGINT,
-
-  FOREIGN KEY(tvseries_id) REFERENCES mediaitems(id)
+  FOREIGN KEY(tvshow_id) REFERENCES mediaitems(id)
 );
 
 -- The seasons table exists for season-specific info.
 -- For now, just images.
 CREATE TABLE seasons(
-  id CHAR(16) PRIMARY KEY NOT NULL,
-  tvseries_id CHAR(16) NULL,
-  season INTEGER,
+  id INTEGER PRIMARY KEY NOT NULL,
+  tvshow_id INTEGER NOT NULL,
+  season INTEGER NOT NULL,
 
-  FOREIGN KEY(tvseries_id) REFERENCES mediaitems(id)
+  FOREIGN KEY(tvshow_id) REFERENCES mediaitems(id)
 );
 
 CREATE TABLE images(
-  id CHAR(16) PRIMARY KEY NOT NULL,
+  id INTEGER PRIMARY KEY NOT NULL,
   mediaitem_id INTEGER NOT NULL,
 
   -- non-unique id (resized images have the same id).
-  image_id CHAR(16),
+  image_id INTEGER,
 
   -- art type (poster, thumb, fanart).
   arttype TEXT NOT NULL,
@@ -135,7 +147,7 @@ CREATE TABLE images(
 CREATE INDEX idx_images_image_id ON images(image_id);
 
 CREATE TABLE uniqueids(
-  id CHAR(16) PRIMARY KEY NOT NULL,
+  id INTEGER PRIMARY KEY NOT NULL,
   mediaitem_id INTEGER NOT NULL,
 
   -- type is imdb, or tvdb, etc
@@ -150,7 +162,7 @@ CREATE TABLE uniqueids(
 );
 
 CREATE TABLE actors_in_item(
-  id CHAR(16) PRIMARY KEY NOT NULL,
+  id INTEGER PRIMARY KEY NOT NULL,
   mediaitem_id INTEGER NOT NULL,
 
   name TEXT NOT NULL,
