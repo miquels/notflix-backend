@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::Serialize;
 use crate::db::DbHandle;
-use super::misc::{Ratings, Thumb, Fanart, UniqueId, Actor};
+use super::misc::{FindItemBy, Ratings, Thumb, Fanart, UniqueIds, Actor};
 use super::{SqlU32, SqlU64, is_default};
 
 #[derive(Serialize, Default, Debug, sqlx::FromRow)]
@@ -32,7 +32,7 @@ pub struct Movie {
     pub fanart: sqlx::types::Json<Vec<Fanart>>,
     #[serde(skip_serializing_if = "is_default")]
     #[sqlx(default)]
-    pub uniqueid: sqlx::types::Json<Vec<UniqueId>>,
+    pub uniqueids: sqlx::types::Json<UniqueIds>,
 
     // Movie + TV Show
     #[serde(skip_serializing_if = "is_default")]
@@ -63,7 +63,11 @@ pub struct Movie {
 }
 
 impl Movie {
-    pub async fn select_one(dbh: &DbHandle, id: SqlU64) -> Option<Movie> {
+    pub async fn lookup(dbh: &DbHandle, find: FindItemBy<'_>) -> Option<Movie> {
+        let id = match find.is_only_id() {
+            Some(id) => id,
+            None => find.lookup(dbh).await?,
+        };
         sqlx::query_as!(
             Movie,
             r#"
@@ -72,7 +76,7 @@ impl Movie {
                        i.rating AS "rating: _",
                        i.thumb AS "thumb: _",
                        i.fanart AS "fanart: _",
-                       i.uniqueid AS "uniqueid: _",
+                       i.uniqueids AS "uniqueids: _",
                        m.originaltitle, m.sorttitle,
                        m.country AS "country: _",
                        m.genre AS "genre: _",
@@ -105,7 +109,7 @@ impl Movie {
                     rating,
                     thumb,
                     fanart,
-                    uniqueid
+                    uniqueids
                 ) VALUES(?, ?, "movie", ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.collection_id,
             self.path,
@@ -116,7 +120,7 @@ impl Movie {
             self.rating,
             self.thumb,
             self.fanart,
-            self.uniqueid
+            self.uniqueids
         )
         .execute(dbh)
         .await?
@@ -170,7 +174,7 @@ impl Movie {
                     rating = ?,
                     thumb = ?,
                     fanart = ?,
-                    uniqueid = ?
+                    uniqueids = ?
                 WHERE id = ?"#,
             self.collection_id,
             self.path,
@@ -181,7 +185,7 @@ impl Movie {
             self.rating,
             self.thumb,
             self.fanart,
-            self.uniqueid,
+            self.uniqueids,
             self.id
         )
         .execute(dbh)

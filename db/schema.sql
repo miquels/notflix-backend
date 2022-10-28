@@ -23,10 +23,10 @@ CREATE TABLE mediaitems (
   plot TEXT,
   tagline TEXT,
   dateadded TEXT,
-  rating JSON NOT NULL DEFAULT "null",
-  thumb JSON NOT NULL DEFAULT "null",
-  fanart JSON NOT NULL DEFAULT "null",
-  uniqueid JSON NOT NULL DEFAULT "null"
+  rating JSON NOT NULL DEFAULT "[]",
+  thumb JSON NOT NULL DEFAULT "[]",
+  fanart JSON NOT NULL DEFAULT "[]",
+  uniqueids JSON NOT NULL DEFAULT "{}"
 );
 
 -- Extra info for thumbwalls.
@@ -57,17 +57,17 @@ CREATE TABLE movies(
   -- common to movies and tvshows
   originaltitle TEXT,
   sorttitle TEXT,
-  country JSON NOT NULL DEFAULT "null",
-  genre JSON NOT NULL DEFAULT "null",
-  studio JSON NOT NULL DEFAULT "null",
+  country JSON NOT NULL DEFAULT "[]",
+  genre JSON NOT NULL DEFAULT "[]",
+  studio JSON NOT NULL DEFAULT "[]",
   premiered TEXT,
   mpaa TEXT,
-  actors JSON NOT NULL DEFAULT "null",
+  actors JSON NOT NULL DEFAULT "[]",
 
   -- movie
   runtime INTEGER,
-  credits JSON NOT NULL DEFAULT "null",
-  director JSON NOT NULL DEFAULT "null",
+  credits JSON NOT NULL DEFAULT "[]",
+  director JSON NOT NULL DEFAULT "[]",
 
   FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
 );
@@ -79,12 +79,12 @@ CREATE TABLE tvshows(
   -- common to movies and tvshows
   originaltitle TEXT,
   sorttitle TEXT,
-  country JSON NOT NULL DEFAULT "null",
-  genre JSON NOT NULL DEFAULT "null",
-  studio JSON NOT NULL DEFAULT "null",
+  country JSON NOT NULL DEFAULT "[]",
+  genre JSON NOT NULL DEFAULT "[]",
+  studio JSON NOT NULL DEFAULT "[]",
   premiered TEXT,
   mpaa TEXT,
-  actors JSON NOT NULL DEFAULT "null",
+  actors JSON NOT NULL DEFAULT "[]",
 
   -- tvshow
   seasons INTEGER,
@@ -106,9 +106,9 @@ CREATE TABLE episodes(
   episode INTEGER,
   displayseason INTEGER,
   displayepisode INTEGER,
-  actors JSON NOT NULL DEFAULT "null",
-  credits JSON NOT NULL DEFAULT "null",
-  director JSON NOT NULL DEFAULT "null",
+  actors JSON NOT NULL DEFAULT "[]",
+  credits JSON NOT NULL DEFAULT "[]",
+  director JSON NOT NULL DEFAULT "[]",
 
   FOREIGN KEY(tvshow_id) REFERENCES mediaitems(id)
 );

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::Serialize;
 use crate::db::DbHandle;
-use super::misc::{Ratings, Thumb, Fanart, UniqueId, Actor};
+use super::misc::{Ratings, Thumb, Fanart, UniqueIds, Actor};
 use super::{SqlU32, SqlU64, is_default};
 
 #[derive(Serialize, Default, Debug, sqlx::FromRow)]
@@ -32,7 +32,7 @@ pub struct Episode {
     pub fanart: sqlx::types::Json<Vec<Fanart>>,
     #[serde(skip_serializing_if = "is_default")]
     #[sqlx(default)]
-    pub uniqueid: sqlx::types::Json<Vec<UniqueId>>,
+    pub uniqueids: sqlx::types::Json<UniqueIds>,
 
     // Episode
     #[serde(skip_serializing_if = "is_default")]
@@ -65,7 +65,7 @@ impl Episode {
                        i.rating AS "rating: _",
                        i.thumb AS "thumb: _",
                        i.fanart AS "fanart: _",
-                       i.uniqueid AS "uniqueid: _",
+                       i.uniqueids AS "uniqueids: _",
                        m.aired, m.runtime, m.season, m.episode,
                        m.displayseason, m.displayepisode,
                        m.actors AS "actors: _",
@@ -95,7 +95,7 @@ impl Episode {
                     rating,
                     thumb,
                     fanart,
-                    uniqueid
+                    uniqueids
                 ) VALUES(?, ?, "episode", ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.collection_id,
             self.path,
@@ -106,7 +106,7 @@ impl Episode {
             self.rating,
             self.thumb,
             self.fanart,
-            self.uniqueid
+            self.uniqueids
         )
         .execute(dbh)
         .await?
@@ -156,7 +156,7 @@ impl Episode {
                     rating = ?,
                     thumb = ?,
                     fanart = ?,
-                    uniqueid = ?
+                    uniqueids = ?
                 WHERE id = ?"#,
             self.collection_id,
             self.path,
@@ -167,7 +167,7 @@ impl Episode {
             self.rating,
             self.thumb,
             self.fanart,
-            self.uniqueid,
+            self.uniqueids,
             self.id
         )
         .execute(dbh)

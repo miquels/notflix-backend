@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::Serialize;
 use crate::db::DbHandle;
-use super::misc::{Ratings, Thumb, Fanart, UniqueId};
+use super::misc::{Ratings, Thumb, Fanart, UniqueIds};
 use super::{SqlU32, SqlU64, is_default};
 
 #[derive(Serialize, Default, Debug, sqlx::FromRow)]
@@ -30,7 +30,7 @@ pub struct TVShow {
     pub fanart: sqlx::types::Json<Vec<Fanart>>,
     #[serde(skip_serializing_if = "is_default")]
     #[sqlx(default)]
-    pub uniqueid: sqlx::types::Json<Vec<UniqueId>>,
+    pub uniqueids: sqlx::types::Json<UniqueIds>,
 
     // Movie + TV Show
     #[serde(skip_serializing_if = "is_default")]
@@ -69,7 +69,7 @@ impl TVShow {
                        i.rating AS "rating: _",
                        i.thumb AS "thumb: _",
                        i.fanart AS "fanart: _",
-                       i.uniqueid AS "uniqueid: _",
+                       i.uniqueids AS "uniqueids: _",
                        m.originaltitle, m.sorttitle,
                        m.country AS "country: _",
                        m.genre AS "genre: _",
@@ -103,7 +103,7 @@ impl TVShow {
                     rating,
                     thumb,
                     fanart,
-                    uniqueid
+                    uniqueids
                 ) VALUES(?, ?, "tvshow", ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.collection_id,
             self.path,
@@ -114,7 +114,7 @@ impl TVShow {
             self.rating,
             self.thumb,
             self.fanart,
-            self.uniqueid
+            self.uniqueids
         )
         .execute(dbh)
         .await?
@@ -168,7 +168,7 @@ impl TVShow {
                     rating = ?,
                     thumb = ?,
                     fanart = ?,
-                    uniqueid = ?
+                    uniqueids = ?
                 WHERE id = ?"#,
             self.collection_id,
             self.path,
@@ -179,7 +179,7 @@ impl TVShow {
             self.rating,
             self.thumb,
             self.fanart,
-            self.uniqueid,
+            self.uniqueids,
             self.id
         )
         .execute(dbh)
