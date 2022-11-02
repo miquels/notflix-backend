@@ -108,7 +108,7 @@ impl<'a> FindItemBy<'a> {
         #[derive(sqlx::FromRow)]
         struct Result {
             id: SqlU64,
-            path: Option<String>,
+            path: String,
             title: Option<String>,
             pub uniqueids: sqlx::types::Json<UniqueIds>,
         }
@@ -126,13 +126,13 @@ impl<'a> FindItemBy<'a> {
         // compare path and/or title in a fuzzy way.
         while let Some(row) = rows.try_next().await.unwrap_or(None) {
             let mut res = false;
+            res |= self.id.map(|x| x == row.id).unwrap_or(false);
             res |= self.imdb.map(|x| row.uniqueids.has("imdb", x)).unwrap_or(false);
             res |= self.tmdb.map(|x| row.uniqueids.has("tmdb", x)).unwrap_or(false);
             res |= self.tvdb.map(|x| row.uniqueids.has("tvdb", x)).unwrap_or(false);
-            let rowpath = row.path.as_ref().map(|p| p.as_str());
-            res |= self.path.is_some() && self.path == rowpath;
-            res |= self.title.is_some() && self.title == rowpath;
-            res |= self.id.map(|x| x == row.id).unwrap_or(false);
+            res |= self.path.map(|x| x == row.path).unwrap_or(false);
+            let title = row.title.as_ref().map(|p| p.as_str());
+            res |= self.title.is_some() && self.title == title;
             if res {
                 return Some(row.id);
             }

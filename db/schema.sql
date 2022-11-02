@@ -16,39 +16,23 @@ CREATE TABLE collections(
 CREATE TABLE mediaitems (
   id integer PRIMARY KEY AUTOINCREMENT,
   collection_id INTEGER NOT NULL,
-  path VARCHAR(255),
+  -- path to the directory cannot be NULL.
+  path VARCHAR(255) NOT NULL,
+  path_lastmodified BIGINT NOT NULL,
   deleted INTEGER DEFAULT 0 NOT NULL,
   type VARCHAR(20) NOT NULL,
   title VARCHAR(255),
   plot TEXT,
   tagline TEXT,
   dateadded TEXT,
+  -- rating MIGHT move to the ratings table
   rating JSON NOT NULL DEFAULT "[]",
+  -- thumb and fanart will move to the `images` table which will backref
   thumb JSON NOT NULL DEFAULT "[]",
   fanart JSON NOT NULL DEFAULT "[]",
+  -- uniqueids will move to the `uniqueids` table which will backref
   uniqueids JSON NOT NULL DEFAULT "{}"
 );
-
--- Extra info for thumbwalls.
-CREATE TABLE mediaitems_extra (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  mediaitem_id INTEGER NOT NULL,
-
-  -- now the things we can sort on.
-  sorttitle VARCHAR(255) NOT NULL,
-  added BIGINT,
-  year INTEGER,
-  rating REAL,
-  votes REAL,
-  genres TEXT,
-
-  -- and some images
-  poster INTEGER,
-  thumb INTEGER,
-
-  FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
-);
-
 
 CREATE TABLE movies(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,9 +46,12 @@ CREATE TABLE movies(
   studio JSON NOT NULL DEFAULT "[]",
   premiered TEXT,
   mpaa TEXT,
+  -- actors will move to the `actors`table which will backref
   actors JSON NOT NULL DEFAULT "[]",
 
   -- movie
+  video TEXT,
+  video_lastmodified BIGINT,
   runtime INTEGER,
   credits JSON NOT NULL DEFAULT "[]",
   director JSON NOT NULL DEFAULT "[]",
@@ -113,22 +100,12 @@ CREATE TABLE episodes(
   FOREIGN KEY(tvshow_id) REFERENCES mediaitems(id)
 );
 
--- The seasons table exists for season-specific info.
--- For now, just images.
-CREATE TABLE seasons(
-  id INTEGER PRIMARY KEY NOT NULL,
-  tvshow_id INTEGER NOT NULL,
-  season INTEGER NOT NULL,
-
-  FOREIGN KEY(tvshow_id) REFERENCES mediaitems(id)
-);
-
 CREATE TABLE images(
   id INTEGER PRIMARY KEY NOT NULL,
   mediaitem_id INTEGER NOT NULL,
 
   -- non-unique id (resized images have the same id).
-  image_id INTEGER,
+  image_id INTEGER NOT NULL,
 
   -- art type (poster, thumb, fanart).
   arttype TEXT NOT NULL,
@@ -138,9 +115,12 @@ CREATE TABLE images(
   height NOT NULL,
 
   -- location, and inode/size to detect changes.
-  path TEXT,
-  inode BIGINT,
-  size INTEGER,
+  path TEXT NOT NULL,
+  inode BIGINT NOT NULL,
+  size INTEGER NOT NULL,
+
+  -- extra info. E.g. for seasons, season thumb or name.
+  extra JSON,
 
   FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
 );

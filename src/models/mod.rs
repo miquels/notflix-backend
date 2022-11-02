@@ -1,12 +1,12 @@
 mod movie;
 mod tvshow;
-mod season;
+// mod season;
 mod episode;
 mod misc;
 
 pub use movie::Movie;
 pub use tvshow::TVShow;
-pub use season::Season;
+// pub use season::Season;
 pub use episode::Episode;
 pub use misc::*;
 

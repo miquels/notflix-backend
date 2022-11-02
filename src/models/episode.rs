@@ -11,7 +11,7 @@ pub struct Episode {
     pub id: SqlU64,
     pub collection_id: SqlU64,
     #[serde(skip_serializing_if = "is_default")]
-    pub path: Option<String>,
+    pub path: String,
     #[serde(skip_serializing_if = "is_default")]
     pub title: Option<String>,
     #[serde(skip_serializing_if = "is_default")]

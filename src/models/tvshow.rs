@@ -10,7 +10,7 @@ pub struct TVShow {
     // Common.
     pub id: SqlU64,
     pub collection_id: SqlU64,
-    pub path: Option<String>,
+    pub path: String,
     pub title: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
     pub plot: Option<String>,
