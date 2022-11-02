@@ -5,10 +5,12 @@ use regex::Regex;
 use url::Url;
 
 mod movies;
+mod nfo;
 mod shows;
 
 pub use movies::{build_movie, build_movies};
 pub use shows::{build_show, build_shows};
+pub use nfo::Nfo;
 
 // Helper macro.
 macro_rules! def_regex {

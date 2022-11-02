@@ -153,7 +153,7 @@ impl Item {
                 nfo_path.push(name);
                 if parse_nfo {
                     if let Ok(mut file) = fs::File::open(&nfo_path).await {
-                        match crate::nfo::read(&mut file).await {
+                        match super::Nfo::read(&mut file).await {
                             Ok(nfo) => movie.nfo = Some(nfo),
                             Err(e) => println!("error reading nfo: {}", e),
                         }

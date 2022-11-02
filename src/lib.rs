@@ -8,6 +8,5 @@ pub mod data;
 pub mod db;
 pub mod genres;
 pub mod kodifs;
-pub mod nfo;
 pub mod models;
 pub mod server;

@@ -233,48 +233,50 @@ fn not_true(s: &Option<String>) -> bool {
     s.as_ref().map(|v| v != "true").unwrap_or(true)
 }
 
-// Read NFO from a tokio::fs::File handle.
-pub async fn read(file: &mut fs::File) -> anyhow::Result<Nfo> {
-    let mut xml = String::new();
-    file.read_to_string(&mut xml).await?;
-    let mut nfo: Nfo = from_str(&xml)?;
+impl Nfo {
+    // Read NFO from a tokio::fs::File handle.
+    pub async fn read(file: &mut fs::File) -> anyhow::Result<Nfo> {
+        let mut xml = String::new();
+        file.read_to_string(&mut xml).await?;
+        let mut nfo: Nfo = from_str(&xml)?;
 
-    // Fix up genre.
-    if nfo.genre.iter().any(|g| g.contains(",") || g.contains("/")) {
-        let g = nfo.genre
-            .iter()
-            .map(|g| g.split(|c| c == ',' || c == '/'))
-            .flatten()
-            .map(|s| s.trim())
-            .filter_map(|s| (s != "").then(|| s.to_string()))
-            .collect::<Vec<_>>();
-        nfo.genre = g;
+        // Fix up genre.
+        if nfo.genre.iter().any(|g| g.contains(",") || g.contains("/")) {
+            let g = nfo.genre
+                .iter()
+                .map(|g| g.split(|c| c == ',' || c == '/'))
+                .flatten()
+                .map(|s| s.trim())
+                .filter_map(|s| (s != "").then(|| s.to_string()))
+                .collect::<Vec<_>>();
+            nfo.genre = g;
+        }
+        nfo.genre = crate::genres::normalize_genres(&nfo.genre);
+
+        Ok(nfo)
     }
-    nfo.genre = crate::genres::normalize_genres(&nfo.genre);
 
-    Ok(nfo)
-}
+    // Compare the NFO file data with the 'Item'.
+    pub async fn update_item(item: &mut Item) -> anyhow::Result<bool> {
 
-// Compare the NFO file data with the 'Item'.
-pub async fn update_item(item: &mut Item) -> anyhow::Result<bool> {
+        let nfo_path = match item.nfo_path {
+            Some(ref p) => p,
+            None => return Ok(false),
+        };
 
-    let nfo_path = match item.nfo_path {
-        Some(ref p) => p,
-        None => return Ok(false),
-    };
+        let mut file = fs::File::open(nfo_path).await?;
+        let modified = systemtime_to_ms(file.metadata().await.map(|m| m.modified().unwrap())?);
+        if item.nfo_time > 0 && item.nfo_time == modified {
+            return Ok(false);
+        }
+        let nfo = Nfo::read(&mut file).await?;
 
-    let mut file = fs::File::open(nfo_path).await?;
-    let modified = systemtime_to_ms(file.metadata().await.map(|m| m.modified().unwrap())?);
-    if item.nfo_time > 0 && item.nfo_time == modified {
-        return Ok(false);
+        item.nfo_time = modified;
+        item.genre = nfo.genre;
+        item.rating = nfo.rating;
+        item.votes = nfo.votes;
+        item.year = nfo.year;
+
+        Ok(true)
     }
-    let nfo = crate::nfo::read(&mut file).await?;
-
-    item.nfo_time = modified;
-    item.genre = nfo.genre;
-    item.rating = nfo.rating;
-    item.votes = nfo.votes;
-    item.year = nfo.year;
-
-    Ok(true)
 }

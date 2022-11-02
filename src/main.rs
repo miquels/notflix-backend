@@ -168,7 +168,7 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
 
 async fn readnfo(opts: ReadNfoOpts) -> anyhow::Result<()> {
     let mut file = tokio::fs::File::open(&opts.filename).await?;
-    let items = notflix_backend::nfo::read(&mut file).await?;
+    let items = kodifs::Nfo::read(&mut file).await?;
     println!("{}", serde_json::to_string_pretty(&items)?);
     Ok(())
 }

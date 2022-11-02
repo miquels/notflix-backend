@@ -4,8 +4,7 @@ use std::sync::{Arc, Mutex};
 use arc_swap::ArcSwap;
 use serde::{Deserialize, Serialize};
 
-use crate::kodifs;
-use crate::nfo::Nfo;
+use crate::kodifs::{self, Nfo};
 
 trait IsEmpty {
     fn empty(&self) -> bool;
