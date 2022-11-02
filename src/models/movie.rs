@@ -1,19 +1,19 @@
 use anyhow::Result;
 use serde::Serialize;
 use crate::db::DbHandle;
-use super::misc::{FindItemBy, Ratings, Thumb, Fanart, UniqueIds, Actor};
+use super::misc::{FindItemBy, FileInfo, Ratings, Thumb, Fanart, UniqueIds, Actor};
 use super::{SqlU32, SqlU64, is_default};
 
-#[derive(Serialize, Default, Debug, sqlx::FromRow)]
+#[derive(Serialize, Debug, sqlx::FromRow)]
 #[serde(default)]
 pub struct Movie {
     // Common.
     pub id: SqlU64,
     pub collection_id: SqlU64,
-    #[serde(skip_serializing_if = "is_default")]
-    pub path: String,
-    #[serde(skip_serializing_if = "is_default")]
-    pub path_lastmodified: i64,
+    #[serde(skip_serializing)]
+    pub directory: sqlx::types::Json<FileInfo>,
+    #[serde(skip_serializing)]
+    pub nfofile: Option<sqlx::types::Json<FileInfo>>,
     #[serde(skip_serializing_if = "is_default")]
     pub title: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
@@ -53,10 +53,8 @@ pub struct Movie {
     pub mpaa: Option<String>,
 
     // Movie
-    #[serde(skip_serializing_if = "is_default")]
-    pub video: Option<String>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub video_lastmodified: Option<i64>,
+    #[serde(skip_serializing)]
+    pub video: sqlx::types::Json<FileInfo>,
     #[serde(skip_serializing_if = "is_default")]
     pub runtime: Option<SqlU32>,
     #[serde(skip_serializing_if = "is_default")]
@@ -77,7 +75,9 @@ impl Movie {
         sqlx::query_as!(
             Movie,
             r#"
-                SELECT i.id, i.collection_id, i.path, i.path_lastmodified,
+                SELECT i.id, i.collection_id,
+                       i.directory AS "directory: _",
+                       i.nfofile AS "nfofile: _",
                        i.title, i.plot, i.tagline,
                        i.dateadded,
                        i.rating AS "rating: _",
@@ -89,7 +89,7 @@ impl Movie {
                        m.genre AS "genre: _",
                        m.studio AS "studio: _",
                        m.premiered, m.mpaa, m.runtime,
-                       m.video, m.video_lastmodified,
+                       m.video AS "video: _",
                        m.actors AS "actors: _",
                        m.credits AS "credits: _",
                        m.director AS "director: _"
@@ -108,7 +108,8 @@ impl Movie {
             r#"
                 INSERT INTO mediaitems(
                     collection_id,
-                    path,
+                    directory,
+                    nfofile,
                     type,
                     title,
                     plot,
@@ -118,9 +119,10 @@ impl Movie {
                     thumb,
                     fanart,
                     uniqueids
-                ) VALUES(?, ?, "movie", ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES(?, ?, ?, "movie", ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.collection_id,
-            self.path,
+            self.directory,
+            self.nfofile,
             self.title,
             self.plot,
             self.tagline,
@@ -174,7 +176,8 @@ impl Movie {
             r#"
                 UPDATE mediaitems SET
                     collection_id = ?,
-                    path = ?,
+                    directory = ?,
+                    nfofile = ?,
                     title = ?,
                     plot = ?,
                     tagline = ?,
@@ -185,7 +188,8 @@ impl Movie {
                     uniqueids = ?
                 WHERE id = ?"#,
             self.collection_id,
-            self.path,
+            self.directory,
+            self.nfofile,
             self.title,
             self.plot,
             self.tagline,

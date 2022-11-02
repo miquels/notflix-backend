@@ -1,17 +1,19 @@
 use anyhow::Result;
 use serde::Serialize;
 use crate::db::DbHandle;
-use super::misc::{Ratings, Thumb, Fanart, UniqueIds, Actor};
+use super::misc::{FileInfo, Ratings, Thumb, Fanart, UniqueIds, Actor};
 use super::{SqlU32, SqlU64, is_default};
 
-#[derive(Serialize, Default, Debug, sqlx::FromRow)]
+#[derive(Serialize, Debug, sqlx::FromRow)]
 #[serde(default)]
 pub struct Episode {
     // Common.
     pub id: SqlU64,
     pub collection_id: SqlU64,
-    #[serde(skip_serializing_if = "is_default")]
-    pub path: String,
+    #[serde(skip_serializing)]
+    pub directory: sqlx::types::Json<FileInfo>,
+    #[serde(skip_serializing)]
+    pub nfofile: Option<sqlx::types::Json<FileInfo>>,
     #[serde(skip_serializing_if = "is_default")]
     pub title: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
@@ -22,27 +24,23 @@ pub struct Episode {
     pub dateadded: Option<String>,
 
     #[serde(skip_serializing_if = "is_default")]
-    #[sqlx(default)]
     pub rating: sqlx::types::Json<Vec<Ratings>>,
     #[serde(skip_serializing_if = "is_default")]
-    #[sqlx(default)]
     pub thumb: sqlx::types::Json<Vec<Thumb>>,
     #[serde(skip_serializing_if = "is_default")]
-    #[sqlx(default)]
     pub fanart: sqlx::types::Json<Vec<Fanart>>,
     #[serde(skip_serializing_if = "is_default")]
-    #[sqlx(default)]
     pub uniqueids: sqlx::types::Json<UniqueIds>,
 
     // Episode
+    #[serde(skip_serializing)]
+    pub video: sqlx::types::Json<FileInfo>,
+    pub season: SqlU32,
+    pub episode: SqlU32,
     #[serde(skip_serializing_if = "is_default")]
     pub aired: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
     pub runtime: Option<SqlU32>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub season: Option<SqlU32>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub episode: Option<SqlU32>,
     #[serde(skip_serializing_if = "is_default")]
     pub displayseason: Option<SqlU32>,
     #[serde(skip_serializing_if = "is_default")]
@@ -60,13 +58,18 @@ impl Episode {
         sqlx::query_as!(
             Episode,
             r#"
-                SELECT i.id, i.collection_id, i.path, i.title, i.plot, i.tagline,
+                SELECT i.id, i.collection_id,
+                       i.directory AS "directory: _",
+                       i.nfofile AS "nfofile: _",
+                       i.title, i.plot, i.tagline,
                        i.dateadded,
                        i.rating AS "rating: _",
                        i.thumb AS "thumb: _",
                        i.fanart AS "fanart: _",
                        i.uniqueids AS "uniqueids: _",
-                       m.aired, m.runtime, m.season, m.episode,
+                       m.video AS "video: _",
+                       m.season, m.episode,
+                       m.aired, m.runtime,
                        m.displayseason, m.displayepisode,
                        m.actors AS "actors: _",
                        m.credits AS "credits: _",
@@ -86,7 +89,8 @@ impl Episode {
             r#"
                 INSERT INTO mediaitems(
                     collection_id,
-                    path,
+                    directory,
+                    nfofile,
                     type,
                     title,
                     plot,
@@ -96,9 +100,10 @@ impl Episode {
                     thumb,
                     fanart,
                     uniqueids
-                ) VALUES(?, ?, "episode", ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES(?, ?, ?, "episode", ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.collection_id,
-            self.path,
+            self.directory,
+            self.nfofile,
             self.title,
             self.plot,
             self.tagline,
@@ -148,7 +153,8 @@ impl Episode {
             r#"
                 UPDATE mediaitems SET
                     collection_id = ?,
-                    path = ?,
+                    directory = ?,
+                    nfofile = ?,
                     title = ?,
                     plot = ?,
                     tagline = ?,
@@ -159,7 +165,8 @@ impl Episode {
                     uniqueids = ?
                 WHERE id = ?"#,
             self.collection_id,
-            self.path,
+            self.directory,
+            self.nfofile,
             self.title,
             self.plot,
             self.tagline,

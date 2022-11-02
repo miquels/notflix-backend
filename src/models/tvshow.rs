@@ -1,16 +1,20 @@
 use anyhow::Result;
 use serde::Serialize;
 use crate::db::DbHandle;
-use super::misc::{Ratings, Thumb, Fanart, UniqueIds};
+use super::misc::{FileInfo, Ratings, Thumb, Fanart, UniqueIds};
 use super::{SqlU32, SqlU64, is_default};
 
-#[derive(Serialize, Default, Debug, sqlx::FromRow)]
+#[derive(Serialize, Debug, sqlx::FromRow)]
 #[serde(default)]
 pub struct TVShow {
     // Common.
     pub id: SqlU64,
     pub collection_id: SqlU64,
-    pub path: String,
+    #[serde(skip_serializing)]
+    pub directory: sqlx::types::Json<FileInfo>,
+    #[serde(skip_serializing)]
+    pub nfofile: Option<sqlx::types::Json<FileInfo>>,
+    #[serde(skip_serializing_if = "is_default")]
     pub title: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
     pub plot: Option<String>,
@@ -64,7 +68,10 @@ impl TVShow {
         sqlx::query_as!(
             TVShow,
             r#"
-                SELECT i.id, i.collection_id, i.path, i.title, i.plot, i.tagline,
+                SELECT i.id, i.collection_id,
+                       i.directory AS "directory: _",
+                       i.nfofile AS "nfofile: _",
+                       i.title, i.plot, i.tagline,
                        i.dateadded,
                        i.rating AS "rating: _",
                        i.thumb AS "thumb: _",
@@ -94,7 +101,8 @@ impl TVShow {
             r#"
                 INSERT INTO mediaitems(
                     collection_id,
-                    path,
+                    directory,
+                    nfofile,
                     type,
                     title,
                     plot,
@@ -104,9 +112,10 @@ impl TVShow {
                     thumb,
                     fanart,
                     uniqueids
-                ) VALUES(?, ?, "tvshow", ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES(?, ?, ?, "tvshow", ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.collection_id,
-            self.path,
+            self.directory,
+            self.nfofile,
             self.title,
             self.plot,
             self.tagline,
@@ -160,7 +169,8 @@ impl TVShow {
             r#"
                 UPDATE mediaitems SET
                     collection_id = ?,
-                    path = ?,
+                    directory = ?,
+                    nfofile = ?,
                     title = ?,
                     plot = ?,
                     tagline = ?,
@@ -171,7 +181,8 @@ impl TVShow {
                     uniqueids = ?
                 WHERE id = ?"#,
             self.collection_id,
-            self.path,
+            self.directory,
+            self.nfofile,
             self.title,
             self.plot,
             self.tagline,

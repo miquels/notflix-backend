@@ -16,11 +16,11 @@ CREATE TABLE collections(
 CREATE TABLE mediaitems (
   id integer PRIMARY KEY AUTOINCREMENT,
   collection_id INTEGER NOT NULL,
-  -- path to the directory cannot be NULL.
-  path VARCHAR(255) NOT NULL,
-  path_lastmodified BIGINT NOT NULL,
+  -- directory is a FileInfo, path + inode + size.
+  directory JSON NOT NULL,
   deleted INTEGER DEFAULT 0 NOT NULL,
   type VARCHAR(20) NOT NULL,
+  nfofile JSON,
   title VARCHAR(255),
   plot TEXT,
   tagline TEXT,
@@ -50,8 +50,7 @@ CREATE TABLE movies(
   actors JSON NOT NULL DEFAULT "[]",
 
   -- movie
-  video TEXT,
-  video_lastmodified BIGINT,
+  video JSON NOT NULL,
   runtime INTEGER,
   credits JSON NOT NULL DEFAULT "[]",
   director JSON NOT NULL DEFAULT "[]",
@@ -87,10 +86,11 @@ CREATE TABLE episodes(
   tvshow_id INTEGER NOT NULL,
 
  -- episode
+  video JSON NOT NULL,
   aired TEXT,
   runtime INTEGER,
-  season INTEGER,
-  episode INTEGER,
+  season INTEGER NOT NULL,
+  episode INTEGER NOT NULL,
   displayseason INTEGER,
   displayepisode INTEGER,
   actors JSON NOT NULL DEFAULT "[]",
@@ -115,9 +115,7 @@ CREATE TABLE images(
   height NOT NULL,
 
   -- location, and inode/size to detect changes.
-  path TEXT NOT NULL,
-  inode BIGINT NOT NULL,
-  size INTEGER NOT NULL,
+  path JSON NOT NULL,
 
   -- extra info. E.g. for seasons, season thumb or name.
   extra JSON,

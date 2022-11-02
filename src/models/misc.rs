@@ -4,6 +4,13 @@ use serde::{Deserialize, Serialize};
 use crate::db::DbHandle;
 use super::SqlU64;
 
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct FileInfo {
+    path:   String,
+    inode:  u64,
+    size:   u64,
+}
+
 #[derive(Deserialize, Serialize, Default, Debug, PartialEq)]
 #[serde(default)]
 pub struct Actor {
@@ -58,7 +65,7 @@ pub struct FindItemBy<'a> {
     pub tmdb: Option<&'a str>,
     pub tvdb: Option<&'a str>,
     pub title: Option<&'a str>,
-    pub path: Option<&'a str>,
+    pub directory: Option<&'a str>,
 }
 
 
@@ -75,7 +82,7 @@ impl<'a> FindItemBy<'a> {
                 self.tmdb.is_none() &&
                 self.tvdb.is_none() &&
                 self.title.is_none() &&
-                self.path.is_none() {
+                self.directory.is_none() {
                 return Some(id);
             }
         }
@@ -108,7 +115,7 @@ impl<'a> FindItemBy<'a> {
         #[derive(sqlx::FromRow)]
         struct Result {
             id: SqlU64,
-            path: String,
+            directory: sqlx::types::Json<FileInfo>,
             title: Option<String>,
             pub uniqueids: sqlx::types::Json<UniqueIds>,
         }
@@ -116,21 +123,22 @@ impl<'a> FindItemBy<'a> {
             Result,
             r#"
                 SELECT  i.id,
-                        i.path, i.title, 
+                        i.directory AS "directory: _",
+                        i.title, 
                         i.uniqueids AS "uniqueids: _"
                 FROM mediaitems i"#,
         )
         .fetch(dbh);
 
         // Inspect each row. Could do this in SQL, but we might want to
-        // compare path and/or title in a fuzzy way.
+        // compare directory and/or title in a fuzzy way.
         while let Some(row) = rows.try_next().await.unwrap_or(None) {
             let mut res = false;
             res |= self.id.map(|x| x == row.id).unwrap_or(false);
             res |= self.imdb.map(|x| row.uniqueids.has("imdb", x)).unwrap_or(false);
             res |= self.tmdb.map(|x| row.uniqueids.has("tmdb", x)).unwrap_or(false);
             res |= self.tvdb.map(|x| row.uniqueids.has("tvdb", x)).unwrap_or(false);
-            res |= self.path.map(|x| x == row.path).unwrap_or(false);
+            res |= self.directory.map(|x| x == row.directory.path).unwrap_or(false);
             let title = row.title.as_ref().map(|p| p.as_str());
             res |= self.title.is_some() && self.title == title;
             if res {
