@@ -1,8 +1,12 @@
 use anyhow::Result;
 use serde::Serialize;
 use crate::db::DbHandle;
+use super::nfo::build_struct;
 use super::misc::{FileInfo, Rating, Thumb, Fanart, UniqueId, Actor};
-use super::{SqlU32, SqlU64, is_default};
+use super::{NfoBase, SqlU32, SqlU64, is_default};
+
+type J<T> = sqlx::types::Json<T>;
+type JV<T> = sqlx::types::Json<Vec<T>>;
 
 #[derive(Serialize, serde::Deserialize, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
@@ -23,23 +27,8 @@ pub struct Episode {
     #[serde(skip_serializing_if = "is_default")]
     pub fanart: sqlx::types::Json<Vec<Fanart>>,
 
-    // Basic NFO
-    #[serde(skip_serializing_if = "is_default")]
-    pub title: Option<String>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub plot: Option<String>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub tagline: Option<String>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub rating: sqlx::types::Json<Vec<Rating>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub uniqueids: sqlx::types::Json<Vec<UniqueId>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub actors: sqlx::types::Json<Vec<Actor>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub credits: sqlx::types::Json<Vec<String>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub directors: sqlx::types::Json<Vec<String>>,
+    // Common NFO.
+    pub nfo_base: NfoBase,
 
     // Detail NFO (Episodes)
     #[serde(skip_serializing_if = "is_default")]
@@ -60,22 +49,21 @@ pub struct Episode {
 
 impl Episode {
     pub async fn select_one(dbh: &DbHandle, id: SqlU64) -> Option<Episode> {
-        sqlx::query_as!(
-            Episode,
+        let r = sqlx::query!(
             r#"
                 SELECT i.id, i.collection_id,
-                       i.directory AS "directory: _",
-                       i.nfofile AS "nfofile: _",
-                       i.title, i.plot, i.tagline,
+                       i.directory AS "directory!: J<FileInfo>",
                        i.dateadded,
-                       i.rating AS "rating: _",
-                       i.thumb AS "thumb: _",
-                       i.fanart AS "fanart: _",
-                       i.uniqueids AS "uniqueids: _",
-                       i.actors AS "actors: _",
-                       i.credits AS "credits: _",
-                       i.directors AS "directors: _",
-                       m.video AS "video: _",
+                       i.nfofile AS "nfofile?: J<FileInfo>",
+                       i.thumb AS "thumb!: JV<Thumb>",
+                       i.fanart AS "fanart!: JV<Fanart>",
+                       i.title, i.plot, i.tagline,
+                       i.rating AS "rating!: JV<Rating>",
+                       i.uniqueids AS "uniqueids!: JV<UniqueId>",
+                       i.actors AS "actors!: JV<Actor>",
+                       i.credits AS "credits!: JV<String>",
+                       i.directors AS "directors!: JV<String>",
+                       m.video AS "video!: J<FileInfo>",
                        m.season, m.episode,
                        m.aired, m.runtime,
                        m.displayseason, m.displayepisode
@@ -86,7 +74,12 @@ impl Episode {
         )
         .fetch_one(dbh)
         .await
-        .ok()
+        .ok()?;
+        build_struct!(Episode, r,
+            id, collection_id, directory, dateadded, nfofile, thumb, fanart,
+            nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.rating,
+            nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
+            video, season, episode, aired, runtime, displayseason, displayepisode)
     }
 
     pub async fn insert(&mut self, dbh: &DbHandle) -> Result<()> {
@@ -115,14 +108,14 @@ impl Episode {
             self.thumb,
             self.fanart,
             self.nfofile,
-            self.title,
-            self.plot,
-            self.tagline,
-            self.rating,
-            self.uniqueids,
-            self.actors,
-            self.credits,
-            self.directors
+            self.nfo_base.title,
+            self.nfo_base.plot,
+            self.nfo_base.tagline,
+            self.nfo_base.rating,
+            self.nfo_base.uniqueids,
+            self.nfo_base.actors,
+            self.nfo_base.credits,
+            self.nfo_base.directors
         )
         .execute(dbh)
         .await?
@@ -178,14 +171,14 @@ impl Episode {
             self.thumb,
             self.fanart,
             self.nfofile,
-            self.title,
-            self.plot,
-            self.tagline,
-            self.rating,
-            self.uniqueids,
-            self.actors,
-            self.credits,
-            self.directors,
+            self.nfo_base.title,
+            self.nfo_base.plot,
+            self.nfo_base.tagline,
+            self.nfo_base.rating,
+            self.nfo_base.uniqueids,
+            self.nfo_base.actors,
+            self.nfo_base.credits,
+            self.nfo_base.directors,
             self.id
         )
         .execute(dbh)

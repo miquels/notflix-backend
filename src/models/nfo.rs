@@ -43,3 +43,35 @@ pub struct NfoMovie {
     #[serde(skip_serializing_if = "is_default")]
     pub mpaa: Option<String>,
 }
+
+// #[sqlx(flatten)] doesn't work with the query_as! macro.
+// So we use query! instead, and then use this macro to copy the
+// result from query! into Movie / TVShow / Episode.
+macro_rules! build_struct {
+    (@E $e:expr) => {
+        $e
+    };
+    (@E $($tt:tt)*) => {
+        compile_error!(stringify!("build_struct: @E:" $($tt)*));
+    };
+    (@V $src:tt, $left:tt.$right:tt) => {
+        build_struct!(@E $src.$right)
+    };
+    (@V $src:tt, $left:tt) => {
+        build_struct!(@E $src.$left)
+    };
+    (@V $($tt:tt)*) => {
+        compile_error!(stringify!("build_struct: @V:" $($tt)*));
+    };
+    ($struct:ident, $src:tt, $($field:tt $(.$field2:tt)*),+) => {
+        Some({
+            let mut v = $struct::default();
+            $(
+                build_struct!(@E v.$field $(.$field2)*) = build_struct!(@V $src, $field $(.$field2)*);
+            )+
+            v
+        })
+    };
+}
+pub(crate) use build_struct;
+

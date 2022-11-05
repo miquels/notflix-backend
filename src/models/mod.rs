@@ -10,6 +10,9 @@ pub use episode::Episode;
 pub use misc::*;
 pub use nfo::*;
 
+type J<T> = sqlx::types::Json<T>;
+type JV<T> = sqlx::types::Json<Vec<T>>;
+
 // helper function.
 fn is_default<'a, T>(t: &'a T) -> bool
 where

@@ -1,8 +1,9 @@
 use anyhow::Result;
 use serde::Serialize;
 use crate::db::DbHandle;
+use super::nfo::build_struct;
 use super::misc::{FindItemBy, FileInfo, Rating, Thumb, Fanart, UniqueId, Actor};
-use super::{SqlU32, SqlU64, is_default};
+use super::{NfoBase, NfoMovie, J, JV, SqlU32, SqlU64, is_default};
 
 #[derive(Serialize, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
@@ -23,39 +24,13 @@ pub struct Movie {
     #[serde(skip_serializing_if = "is_default")]
     pub fanart: sqlx::types::Json<Vec<Fanart>>,
 
-    // Basic NFO
-    #[serde(skip_serializing_if = "is_default")]
-    pub title: Option<String>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub plot: Option<String>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub tagline: Option<String>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub rating: sqlx::types::Json<Vec<Rating>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub uniqueids: sqlx::types::Json<Vec<UniqueId>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub actors: sqlx::types::Json<Vec<Actor>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub credits: sqlx::types::Json<Vec<String>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub directors: sqlx::types::Json<Vec<String>>,
+    // Common NFO
+    #[serde(flatten)]
+    pub nfo_base: NfoBase,
 
-    // Detail NFO (Movie + TV Show)
-    #[serde(skip_serializing_if = "is_default")]
-    pub originaltitle: Option<String>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub sorttitle: Option<String>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub country: sqlx::types::Json<Vec<String>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub genre: sqlx::types::Json<Vec<String>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub studio: sqlx::types::Json<Vec<String>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub premiered: Option<String>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub mpaa: Option<String>,
+    // Movie + TVShow NFO
+    #[serde(flatten)]
+    pub nfo_movie: NfoMovie,
 
     // Movie
     #[serde(skip_serializing)]
@@ -70,27 +45,29 @@ impl Movie {
             Some(id) => id,
             None => find.lookup(dbh).await?,
         };
-        sqlx::query_as!(
-            Movie,
+        let r = sqlx::query!(
             r#"
                 SELECT i.id, i.collection_id,
-                       i.directory AS "directory: _",
-                       i.nfofile AS "nfofile: _",
-                       i.title, i.plot, i.tagline,
+                       i.directory AS "directory!: J<FileInfo>",
                        i.dateadded,
-                       i.rating AS "rating: _",
-                       i.thumb AS "thumb: _",
-                       i.fanart AS "fanart: _",
-                       i.uniqueids AS "uniqueids: _",
-                       i.actors AS "actors: _",
-                       i.credits AS "credits: _",
-                       i.directors AS "directors: _",
-                       m.originaltitle, m.sorttitle,
-                       m.country AS "country: _",
-                       m.genre AS "genre: _",
-                       m.studio AS "studio: _",
-                       m.premiered, m.mpaa, m.runtime,
-                       m.video AS "video: _"
+                       i.nfofile AS "nfofile?: J<FileInfo>",
+                       i.thumb AS "thumb!: JV<Thumb>",
+                       i.fanart AS "fanart!: JV<Fanart>",
+                       i.title, i.plot, i.tagline,
+                       i.rating AS "rating!: JV<Rating>",
+                       i.uniqueids AS "uniqueids!: JV<UniqueId>",
+                       i.actors AS "actors!: JV<Actor>",
+                       i.credits AS "credits!: JV<String>",
+                       i.directors AS "directors!: JV<String>",
+                       m.originaltitle,
+                       m.sorttitle,
+                       m.country AS "country!: JV<String>",
+                       m.genre AS "genre!: JV<String>",
+                       m.studio AS "studio!: JV<String>",
+                       m.premiered,
+                       m.mpaa,
+                       m.runtime,
+                       m.video AS "video: J<FileInfo>"
                 FROM mediaitems i
                 JOIN movies m ON (m.mediaitem_id = i.id)
                 WHERE i.id = ? AND i.deleted = 0"#,
@@ -98,7 +75,14 @@ impl Movie {
         )
         .fetch_one(dbh)
         .await
-        .ok()
+        .ok()?;
+        build_struct!(Movie, r,
+            id, collection_id, directory, dateadded, nfofile, thumb, fanart,
+            nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.rating,
+            nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
+            nfo_movie.originaltitle, nfo_movie.sorttitle, nfo_movie.country,
+            nfo_movie.genre, nfo_movie.studio, nfo_movie.premiered, nfo_movie.mpaa,
+            runtime, video)
     }
 
     pub async fn insert(&mut self, dbh: &DbHandle) -> Result<()> {
@@ -107,15 +91,15 @@ impl Movie {
                 INSERT INTO mediaitems(
                     collection_id,
                     directory,
+                    dateadded,
+                    thumb,
+                    fanart,
                     nfofile,
                     type,
                     title,
                     plot,
                     tagline,
-                    dateadded,
                     rating,
-                    thumb,
-                    fanart,
                     uniqueids,
                     actors,
                     credits,
@@ -123,18 +107,18 @@ impl Movie {
                 ) VALUES(?, ?, ?, "movie", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.collection_id,
             self.directory,
-            self.nfofile,
-            self.title,
-            self.plot,
-            self.tagline,
             self.dateadded,
-            self.rating,
             self.thumb,
             self.fanart,
-            self.uniqueids,
-            self.actors,
-            self.credits,
-            self.directors
+            self.nfofile,
+            self.nfo_base.title,
+            self.nfo_base.plot,
+            self.nfo_base.tagline,
+            self.nfo_base.rating,
+            self.nfo_base.uniqueids,
+            self.nfo_base.actors,
+            self.nfo_base.credits,
+            self.nfo_base.directors
         )
         .execute(dbh)
         .await?
@@ -151,17 +135,19 @@ impl Movie {
                     studio,
                     premiered,
                     mpaa,
-                    runtime
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                    runtime,
+                    video
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.id,
-            self.originaltitle,
-            self.sorttitle,
-            self.country,
-            self.genre,
-            self.studio,
-            self.premiered,
-            self.mpaa,
-            self.runtime
+            self.nfo_movie.originaltitle,
+            self.nfo_movie.sorttitle,
+            self.nfo_movie.country,
+            self.nfo_movie.genre,
+            self.nfo_movie.studio,
+            self.nfo_movie.premiered,
+            self.nfo_movie.mpaa,
+            self.runtime,
+            self.video,
         )
         .execute(dbh)
         .await?;
@@ -175,14 +161,14 @@ impl Movie {
                 UPDATE mediaitems SET
                     collection_id = ?,
                     directory = ?,
+                    dateadded = ?,
+                    thumb = ?,
+                    fanart = ?,
                     nfofile = ?,
                     title = ?,
                     plot = ?,
                     tagline = ?,
-                    dateadded = ?,
                     rating = ?,
-                    thumb = ?,
-                    fanart = ?,
                     uniqueids = ?,
                     actors = ?,
                     credits = ?,
@@ -190,18 +176,18 @@ impl Movie {
                 WHERE id = ?"#,
             self.collection_id,
             self.directory,
-            self.nfofile,
-            self.title,
-            self.plot,
-            self.tagline,
             self.dateadded,
-            self.rating,
             self.thumb,
             self.fanart,
-            self.uniqueids,
-            self.actors,
-            self.credits,
-            self.directors,
+            self.nfofile,
+            self.nfo_base.title,
+            self.nfo_base.plot,
+            self.nfo_base.tagline,
+            self.nfo_base.rating,
+            self.nfo_base.uniqueids,
+            self.nfo_base.actors,
+            self.nfo_base.credits,
+            self.nfo_base.directors,
             self.id
         )
         .execute(dbh)
@@ -217,16 +203,18 @@ impl Movie {
                     studio = ?,
                     premiered = ?,
                     mpaa = ?,
-                    runtime = ?
+                    runtime = ?,
+                    video = ?
                 WHERE mediaitem_id = ?"#,
-            self.originaltitle,
-            self.sorttitle,
-            self.country,
-            self.genre,
-            self.studio,
-            self.premiered,
-            self.mpaa,
+            self.nfo_movie.originaltitle,
+            self.nfo_movie.sorttitle,
+            self.nfo_movie.country,
+            self.nfo_movie.genre,
+            self.nfo_movie.studio,
+            self.nfo_movie.premiered,
+            self.nfo_movie.mpaa,
             self.runtime,
+            self.video,
             self.id
         )
         .execute(dbh)

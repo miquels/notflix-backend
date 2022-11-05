@@ -113,26 +113,6 @@ pub struct Rating {
     pub votes:    Option<u32>,
 }
 
-macro_rules! copy_fields {
-    ($src:expr, $dst:expr, $($field:ident),+) => {
-        {
-            $( $dst.$field = $src.$field; )+
-        }
-    };
-}
-
-macro_rules! copy_nfo_base {
-    ($src:expr, $dst: expr) => {
-        copy_fields!($src, $dst, title, plot, tagline, rating, uniqueids, actors, credits, directors)
-    };
-}
-
-macro_rules! copy_nfo_movie {
-    ($src:expr, $dst: expr) => {
-        copy_fields!($src, $dst, originaltitle, sorttitle, country, genre, studio, premiered, mpaa)
-    };
-}
-
 /// NFO file contents.
 #[derive(Serialize, Deserialize, Default, Debug)]
 #[serde(default)]
@@ -405,26 +385,21 @@ impl Nfo {
     }
 
     pub fn update_movie(&self, item: &mut models::Movie) {
-        let nfo_base = self.to_nfo_base();
-        copy_nfo_base!(nfo_base, item);
-        let nfo_movie = self.to_nfo_movie();
-        copy_nfo_movie!(nfo_movie, item);
+        item.nfo_base = self.to_nfo_base();
+        item.nfo_movie = self.to_nfo_movie();
         item.runtime = self.runtime.clone().map(|r| r as SqlU32);
     }
 
     pub fn update_tvshow(&self, item: &mut models::TVShow) {
-        let nfo_base = self.to_nfo_base();
-        copy_nfo_base!(nfo_base, item);
-        let nfo_movie = self.to_nfo_movie();
-        copy_nfo_movie!(nfo_movie, item);
+        item.nfo_base = self.to_nfo_base();
+        item.nfo_movie = self.to_nfo_movie();
         item.seasons = self.season.clone().map(|r| r as SqlU32);
         item.episodes = self.episode.clone().map(|r| r as SqlU32);
         item.status = self.status.clone();
     }
 
     pub fn update_episode(&self, item: &mut models::Episode) {
-        let nfo_base = self.to_nfo_base();
-        copy_nfo_base!(nfo_base, item);
+        item.nfo_base = self.to_nfo_base();
         item.runtime = self.runtime.clone().map(|r| r as SqlU32);
         item.aired = self.status.clone();
         item.displayseason = self.displayseason.clone().map(|r| r as SqlU32);
