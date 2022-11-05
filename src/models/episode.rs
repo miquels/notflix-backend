@@ -3,10 +3,7 @@ use serde::Serialize;
 use crate::db::DbHandle;
 use super::nfo::build_struct;
 use super::misc::{FileInfo, Rating, Thumb, Fanart, UniqueId, Actor};
-use super::{NfoBase, SqlU32, SqlU64, is_default};
-
-type J<T> = sqlx::types::Json<T>;
-type JV<T> = sqlx::types::Json<Vec<T>>;
+use super::{J, JV, NfoBase, SqlU32, SqlU64, is_default};
 
 #[derive(Serialize, serde::Deserialize, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
