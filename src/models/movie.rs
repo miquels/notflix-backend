@@ -1,10 +1,10 @@
 use anyhow::Result;
 use serde::Serialize;
 use crate::db::DbHandle;
-use super::misc::{FindItemBy, FileInfo, Ratings, Thumb, Fanart, UniqueIds, Actor};
+use super::misc::{FindItemBy, FileInfo, Rating, Thumb, Fanart, UniqueId, Actor};
 use super::{SqlU32, SqlU64, is_default};
 
-#[derive(Serialize, Debug, sqlx::FromRow)]
+#[derive(Serialize, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
 pub struct Movie {
     // Common.
@@ -12,8 +12,18 @@ pub struct Movie {
     pub collection_id: SqlU64,
     #[serde(skip_serializing)]
     pub directory: sqlx::types::Json<FileInfo>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub dateadded: Option<String>,
     #[serde(skip_serializing)]
     pub nfofile: Option<sqlx::types::Json<FileInfo>>,
+
+    // Common, from filesystem scan.
+    #[serde(skip_serializing_if = "is_default")]
+    pub thumb: sqlx::types::Json<Vec<Thumb>>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub fanart: sqlx::types::Json<Vec<Fanart>>,
+
+    // Basic NFO
     #[serde(skip_serializing_if = "is_default")]
     pub title: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
@@ -21,22 +31,17 @@ pub struct Movie {
     #[serde(skip_serializing_if = "is_default")]
     pub tagline: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
-    pub dateadded: Option<String>,
+    pub rating: sqlx::types::Json<Vec<Rating>>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub uniqueids: sqlx::types::Json<Vec<UniqueId>>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub actors: sqlx::types::Json<Vec<Actor>>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub credits: sqlx::types::Json<Vec<String>>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub directors: sqlx::types::Json<Vec<String>>,
 
-    #[serde(skip_serializing_if = "is_default")]
-    #[sqlx(default)]
-    pub rating: sqlx::types::Json<Vec<Ratings>>,
-    #[serde(skip_serializing_if = "is_default")]
-    #[sqlx(default)]
-    pub thumb: sqlx::types::Json<Vec<Thumb>>,
-    #[serde(skip_serializing_if = "is_default")]
-    #[sqlx(default)]
-    pub fanart: sqlx::types::Json<Vec<Fanart>>,
-    #[serde(skip_serializing_if = "is_default")]
-    #[sqlx(default)]
-    pub uniqueids: sqlx::types::Json<UniqueIds>,
-
-    // Movie + TV Show
+    // Detail NFO (Movie + TV Show)
     #[serde(skip_serializing_if = "is_default")]
     pub originaltitle: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
@@ -57,13 +62,6 @@ pub struct Movie {
     pub video: sqlx::types::Json<FileInfo>,
     #[serde(skip_serializing_if = "is_default")]
     pub runtime: Option<SqlU32>,
-    #[serde(skip_serializing_if = "is_default")]
-    #[sqlx(default)]
-    pub actors: sqlx::types::Json<Vec<Actor>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub credits: sqlx::types::Json<Vec<String>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub director: sqlx::types::Json<Vec<String>>,
 }
 
 impl Movie {
@@ -84,15 +82,15 @@ impl Movie {
                        i.thumb AS "thumb: _",
                        i.fanart AS "fanart: _",
                        i.uniqueids AS "uniqueids: _",
+                       i.actors AS "actors: _",
+                       i.credits AS "credits: _",
+                       i.directors AS "directors: _",
                        m.originaltitle, m.sorttitle,
                        m.country AS "country: _",
                        m.genre AS "genre: _",
                        m.studio AS "studio: _",
                        m.premiered, m.mpaa, m.runtime,
-                       m.video AS "video: _",
-                       m.actors AS "actors: _",
-                       m.credits AS "credits: _",
-                       m.director AS "director: _"
+                       m.video AS "video: _"
                 FROM mediaitems i
                 JOIN movies m ON (m.mediaitem_id = i.id)
                 WHERE i.id = ? AND i.deleted = 0"#,
@@ -118,8 +116,11 @@ impl Movie {
                     rating,
                     thumb,
                     fanart,
-                    uniqueids
-                ) VALUES(?, ?, ?, "movie", ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                    uniqueids,
+                    actors,
+                    credits,
+                    directors
+                ) VALUES(?, ?, ?, "movie", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.collection_id,
             self.directory,
             self.nfofile,
@@ -130,7 +131,10 @@ impl Movie {
             self.rating,
             self.thumb,
             self.fanart,
-            self.uniqueids
+            self.uniqueids,
+            self.actors,
+            self.credits,
+            self.directors
         )
         .execute(dbh)
         .await?
@@ -147,11 +151,8 @@ impl Movie {
                     studio,
                     premiered,
                     mpaa,
-                    runtime,
-                    actors,
-                    credits,
-                    director
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                    runtime
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.id,
             self.originaltitle,
             self.sorttitle,
@@ -160,10 +161,7 @@ impl Movie {
             self.studio,
             self.premiered,
             self.mpaa,
-            self.runtime,
-            self.actors,
-            self.credits,
-            self.director
+            self.runtime
         )
         .execute(dbh)
         .await?;
@@ -185,7 +183,10 @@ impl Movie {
                     rating = ?,
                     thumb = ?,
                     fanart = ?,
-                    uniqueids = ?
+                    uniqueids = ?,
+                    actors = ?,
+                    credits = ?,
+                    directors = ?
                 WHERE id = ?"#,
             self.collection_id,
             self.directory,
@@ -198,6 +199,9 @@ impl Movie {
             self.thumb,
             self.fanart,
             self.uniqueids,
+            self.actors,
+            self.credits,
+            self.directors,
             self.id
         )
         .execute(dbh)
@@ -213,10 +217,7 @@ impl Movie {
                     studio = ?,
                     premiered = ?,
                     mpaa = ?,
-                    runtime = ?,
-                    actors = ?,
-                    credits = ?,
-                    director = ?
+                    runtime = ?
                 WHERE mediaitem_id = ?"#,
             self.originaltitle,
             self.sorttitle,
@@ -226,9 +227,6 @@ impl Movie {
             self.premiered,
             self.mpaa,
             self.runtime,
-            self.actors,
-            self.credits,
-            self.director,
             self.id
         )
         .execute(dbh)

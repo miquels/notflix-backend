@@ -2,21 +2,31 @@ use futures_util::TryStreamExt;
 use serde::{Deserialize, Serialize};
 
 use crate::db::DbHandle;
-use super::SqlU64;
+use super::{SqlU64, is_default};
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
 pub struct FileInfo {
     path:   String,
     inode:  u64,
     size:   u64,
 }
 
-#[derive(Deserialize, Serialize, Default, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
 #[serde(default)]
 pub struct Actor {
+    #[serde(skip_serializing_if = "is_default")]
+    pub name:   Option<String>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub role:   Option<String>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub order: Option<u32>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub thumb:  Option<Thumb>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub thumb_url:  Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Default, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
 #[serde(default)]
 pub struct Thumb {
 }
@@ -26,36 +36,38 @@ pub struct Thumb {
 pub struct Fanart {
 }
 
-#[derive(Deserialize, Serialize, Default, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
 #[serde(default)]
-pub struct Ratings {
+pub struct Rating {
+    #[serde(skip_serializing_if = "is_default")]
+    pub name:   Option<String>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub default: Option<bool>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub max:    Option<u32>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub value:    Option<f32>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub votes:    Option<u32>,
 }
 
-#[derive(Deserialize, Serialize, Default, Debug, PartialEq)]
-#[serde(default)]
-pub struct UniqueIds {
-    pub id: SqlU64,
-    pub uniqueids: Vec<UniqueId>,
-}
-
-#[derive(Deserialize, Serialize, Default, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
 #[serde(default)]
 pub struct UniqueId {
     #[serde(rename = "type")]
-    pub idtype: String,
+    pub idtype: Option<String>,
     pub default: bool,
     pub id: String,
 }
 
-impl UniqueIds {
-    pub fn has(&self, idtype: &str, id: &str) -> bool {
-        for uid in &self.uniqueids {
-            if uid.idtype == idtype && uid.id == id {
-                return true;
-            }
+fn has_uid(uids: &Vec<UniqueId>, idtype: &str, id: &str) -> bool {
+    for uid in uids {
+        let uid_idtype = uid.idtype.as_ref().map(|s| s.as_str()).unwrap_or("");
+        if uid_idtype == idtype && uid.id == id {
+            return true;
         }
-        false
     }
+    false
 }
 
 #[derive(Default)]
@@ -71,7 +83,7 @@ pub struct FindItemBy<'a> {
 
 impl<'a> FindItemBy<'a> {
 
-    pub(crate) fn new() -> FindItemBy<'a> {
+    pub fn new() -> FindItemBy<'a> {
         FindItemBy::default()
     }
 
@@ -117,7 +129,7 @@ impl<'a> FindItemBy<'a> {
             id: SqlU64,
             directory: sqlx::types::Json<FileInfo>,
             title: Option<String>,
-            pub uniqueids: sqlx::types::Json<UniqueIds>,
+            pub uniqueids: sqlx::types::Json<Vec<UniqueId>>,
         }
         let mut rows = sqlx::query_as!(
             Result,
@@ -135,9 +147,9 @@ impl<'a> FindItemBy<'a> {
         while let Some(row) = rows.try_next().await.unwrap_or(None) {
             let mut res = false;
             res |= self.id.map(|x| x == row.id).unwrap_or(false);
-            res |= self.imdb.map(|x| row.uniqueids.has("imdb", x)).unwrap_or(false);
-            res |= self.tmdb.map(|x| row.uniqueids.has("tmdb", x)).unwrap_or(false);
-            res |= self.tvdb.map(|x| row.uniqueids.has("tvdb", x)).unwrap_or(false);
+            res |= self.imdb.map(|x| has_uid(&row.uniqueids, "imdb", x)).unwrap_or(false);
+            res |= self.tmdb.map(|x| has_uid(&row.uniqueids, "tmdb", x)).unwrap_or(false);
+            res |= self.tvdb.map(|x| has_uid(&row.uniqueids, "tvdb", x)).unwrap_or(false);
             res |= self.directory.map(|x| x == row.directory.path).unwrap_or(false);
             let title = row.title.as_ref().map(|p| p.as_str());
             res |= self.title.is_some() && self.title == title;

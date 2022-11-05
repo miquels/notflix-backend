@@ -1,10 +1,10 @@
 use anyhow::Result;
 use serde::Serialize;
 use crate::db::DbHandle;
-use super::misc::{FileInfo, Ratings, Thumb, Fanart, UniqueIds, Actor};
+use super::misc::{FileInfo, Rating, Thumb, Fanart, UniqueId, Actor};
 use super::{SqlU32, SqlU64, is_default};
 
-#[derive(Serialize, Debug, sqlx::FromRow)]
+#[derive(Serialize, serde::Deserialize, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
 pub struct Episode {
     // Common.
@@ -12,8 +12,18 @@ pub struct Episode {
     pub collection_id: SqlU64,
     #[serde(skip_serializing)]
     pub directory: sqlx::types::Json<FileInfo>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub dateadded: Option<String>,
     #[serde(skip_serializing)]
     pub nfofile: Option<sqlx::types::Json<FileInfo>>,
+
+    // Common, from filesystem scan.
+    #[serde(skip_serializing_if = "is_default")]
+    pub thumb: sqlx::types::Json<Vec<Thumb>>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub fanart: sqlx::types::Json<Vec<Fanart>>,
+
+    // Basic NFO
     #[serde(skip_serializing_if = "is_default")]
     pub title: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
@@ -21,22 +31,17 @@ pub struct Episode {
     #[serde(skip_serializing_if = "is_default")]
     pub tagline: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
-    pub dateadded: Option<String>,
+    pub rating: sqlx::types::Json<Vec<Rating>>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub uniqueids: sqlx::types::Json<Vec<UniqueId>>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub actors: sqlx::types::Json<Vec<Actor>>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub credits: sqlx::types::Json<Vec<String>>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub directors: sqlx::types::Json<Vec<String>>,
 
-    #[serde(skip_serializing_if = "is_default")]
-    pub rating: sqlx::types::Json<Vec<Ratings>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub thumb: sqlx::types::Json<Vec<Thumb>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub fanart: sqlx::types::Json<Vec<Fanart>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub uniqueids: sqlx::types::Json<UniqueIds>,
-
-    // Episode
-    #[serde(skip_serializing)]
-    pub video: sqlx::types::Json<FileInfo>,
-    pub season: SqlU32,
-    pub episode: SqlU32,
+    // Detail NFO (Episodes)
     #[serde(skip_serializing_if = "is_default")]
     pub aired: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
@@ -45,12 +50,12 @@ pub struct Episode {
     pub displayseason: Option<SqlU32>,
     #[serde(skip_serializing_if = "is_default")]
     pub displayepisode: Option<SqlU32>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub actors: sqlx::types::Json<Vec<Actor>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub credits: sqlx::types::Json<Vec<String>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub director: sqlx::types::Json<Vec<String>>,
+
+    // Episode
+    #[serde(skip_serializing)]
+    pub video: sqlx::types::Json<FileInfo>,
+    pub season: SqlU32,
+    pub episode: SqlU32,
 }
 
 impl Episode {
@@ -67,17 +72,17 @@ impl Episode {
                        i.thumb AS "thumb: _",
                        i.fanart AS "fanart: _",
                        i.uniqueids AS "uniqueids: _",
+                       i.actors AS "actors: _",
+                       i.credits AS "credits: _",
+                       i.directors AS "directors: _",
                        m.video AS "video: _",
                        m.season, m.episode,
                        m.aired, m.runtime,
-                       m.displayseason, m.displayepisode,
-                       m.actors AS "actors: _",
-                       m.credits AS "credits: _",
-                       m.director AS "director: _"
+                       m.displayseason, m.displayepisode
                 FROM mediaitems i
                 JOIN episodes m ON (m.mediaitem_id = i.id)
                 WHERE i.id = ? AND i.deleted = 0"#,
-            id,
+                id
         )
         .fetch_one(dbh)
         .await
@@ -90,28 +95,34 @@ impl Episode {
                 INSERT INTO mediaitems(
                     collection_id,
                     directory,
+                    dateadded,
+                    thumb,
+                    fanart,
                     nfofile,
                     type,
                     title,
                     plot,
                     tagline,
-                    dateadded,
                     rating,
-                    thumb,
-                    fanart,
-                    uniqueids
-                ) VALUES(?, ?, ?, "episode", ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                    uniqueids,
+                    actors,
+                    credits,
+                    directors
+                ) VALUES(?, ?, ?, "episode", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.collection_id,
             self.directory,
+            self.dateadded,
+            self.thumb,
+            self.fanart,
             self.nfofile,
             self.title,
             self.plot,
             self.tagline,
-            self.dateadded,
             self.rating,
-            self.thumb,
-            self.fanart,
-            self.uniqueids
+            self.uniqueids,
+            self.actors,
+            self.credits,
+            self.directors
         )
         .execute(dbh)
         .await?
@@ -126,11 +137,8 @@ impl Episode {
                     season,
                     episode,
                     displayseason,
-                    displayepisode,
-                    actors,
-                    credits,
-                    director
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                    displayepisode
+                ) VALUES(?, ?, ?, ?, ?, ?, ?)"#,
             self.id,
             self.aired,
             self.runtime,
@@ -138,9 +146,6 @@ impl Episode {
             self.episode,
             self.displayseason,
             self.displayepisode,
-            self.actors,
-            self.credits,
-            self.director
         )
         .execute(dbh)
         .await?;
@@ -154,27 +159,33 @@ impl Episode {
                 UPDATE mediaitems SET
                     collection_id = ?,
                     directory = ?,
+                    dateadded = ?,
+                    thumb = ?,
+                    fanart = ?,
                     nfofile = ?,
                     title = ?,
                     plot = ?,
                     tagline = ?,
-                    dateadded = ?,
                     rating = ?,
-                    thumb = ?,
-                    fanart = ?,
-                    uniqueids = ?
+                    uniqueids = ?,
+                    actors = ?,
+                    credits = ?,
+                    directors = ?
                 WHERE id = ?"#,
             self.collection_id,
             self.directory,
+            self.dateadded,
+            self.thumb,
+            self.fanart,
             self.nfofile,
             self.title,
             self.plot,
             self.tagline,
-            self.dateadded,
             self.rating,
-            self.thumb,
-            self.fanart,
             self.uniqueids,
+            self.actors,
+            self.credits,
+            self.directors,
             self.id
         )
         .execute(dbh)
@@ -188,10 +199,7 @@ impl Episode {
                     season = ?,
                     episode = ?,
                     displayseason = ?,
-                    displayepisode = ?,
-                    actors = ?,
-                    credits = ?,
-                    director = ?
+                    displayepisode = ?
                 WHERE mediaitem_id = ?"#,
             self.aired,
             self.runtime,
@@ -199,9 +207,6 @@ impl Episode {
             self.episode,
             self.displayseason,
             self.displayepisode,
-            self.actors,
-            self.credits,
-            self.director,
             self.id
         )
         .execute(dbh)

@@ -31,7 +31,11 @@ CREATE TABLE mediaitems (
   thumb JSON NOT NULL DEFAULT "[]",
   fanart JSON NOT NULL DEFAULT "[]",
   -- uniqueids will move to the `uniqueids` table which will backref
-  uniqueids JSON NOT NULL DEFAULT "{}"
+  uniqueids JSON NOT NULL DEFAULT "{}",
+  -- this might all move to a `credits` table
+  actors JSON NOT NULL DEFAULT "[]",
+  credits JSON NOT NULL DEFAULT "[]",
+  directors JSON NOT NULL DEFAULT "[]"
 );
 
 CREATE TABLE movies(
@@ -46,14 +50,10 @@ CREATE TABLE movies(
   studio JSON NOT NULL DEFAULT "[]",
   premiered TEXT,
   mpaa TEXT,
-  -- actors will move to the `actors`table which will backref
-  actors JSON NOT NULL DEFAULT "[]",
 
   -- movie
   video JSON NOT NULL,
   runtime INTEGER,
-  credits JSON NOT NULL DEFAULT "[]",
-  director JSON NOT NULL DEFAULT "[]",
 
   FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
 );
@@ -70,7 +70,6 @@ CREATE TABLE tvshows(
   studio JSON NOT NULL DEFAULT "[]",
   premiered TEXT,
   mpaa TEXT,
-  actors JSON NOT NULL DEFAULT "[]",
 
   -- tvshow
   seasons INTEGER,
@@ -93,9 +92,6 @@ CREATE TABLE episodes(
   episode INTEGER NOT NULL,
   displayseason INTEGER,
   displayepisode INTEGER,
-  actors JSON NOT NULL DEFAULT "[]",
-  credits JSON NOT NULL DEFAULT "[]",
-  director JSON NOT NULL DEFAULT "[]",
 
   FOREIGN KEY(tvshow_id) REFERENCES mediaitems(id)
 );

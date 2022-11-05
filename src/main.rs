@@ -101,10 +101,12 @@ async fn serve(opts: ServeOpts) -> anyhow::Result<()> {
     server::serve(cfg, handle).await
 }
 
-async fn dumpdb(opts: DumpDbOpts) -> anyhow::Result<()> {
+async fn dumpdb(_opts: DumpDbOpts) -> anyhow::Result<()> {
+    /*
     let handle = db::connect_db(&opts.database).await?;
     let items = db::get_items(&handle).await?;
     println!("{}", serde_json::to_string_pretty(&items)?);
+    */
     Ok(())
 }
 
