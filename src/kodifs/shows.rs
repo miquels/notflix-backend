@@ -1,12 +1,10 @@
 use std::collections::HashMap;
 use std::time::Duration;
-use std::path::PathBuf;
-use std::sync::Arc;
 
-use arc_swap::ArcSwap;
 use tokio::fs;
 
-use crate::collections::*;
+use crate::collections::Collection;
+use crate::models::{TVShow, Episode, FileInfo};
 use super::*;
 
 #[derive(Debug)]
@@ -15,6 +13,11 @@ struct EpMap {
     episode_idx: usize,
 }
 
+pub async fn build_shows(coll: &Collection, pace: u32) {
+    todo!()
+}
+
+/*
 pub async fn build_shows(coll: &Collection, pace: u32) {
 
     let mut d = match fs::read_dir(&coll.directory).await {
@@ -46,12 +49,41 @@ pub async fn build_shows(coll: &Collection, pace: u32) {
     //   (that will allow it to be restored later)
     *coll.items.lock().unwrap() = items;
 }
+*/
 
-pub async fn build_show(coll: &Collection, name: &str) -> Option<Item> {
-    Item::build_show(coll, name).await
+pub async fn build_show(coll: &Collection, name: &str) -> Option<TVShow> {
+    Show::build_show(coll, name).await
 }
 
-impl Item {
+#[derive(serde::Serialize, Debug, Default)]
+struct Season {
+    pub seasonno:   u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub banner: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fanart: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub poster: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub episodes: Vec<Episode>,
+}
+
+#[derive(serde::Serialize, Default, Debug)]
+struct Show {
+    tvshow:  TVShow,
+    seasons: Vec<Season>,
+    // db:      DataBase,
+    banner:  Option<String>,
+    fanart:  Option<String>,
+    folder:  Option<String>,
+    poster:  Option<String>,
+    season_all_banner:  Option<String>,
+    season_all_poster:  Option<String>,
+    season_specials_banner:  Option<String>,
+    season_specials_poster:  Option<String>,
+}
+
+impl Show {
 
     // Look up season by seasonno. If not present, create,
     fn get_season(&mut self, seasonno: u32) -> usize {
@@ -122,12 +154,13 @@ impl Item {
                 }
 
                 // nfo file.
+                /* XXX TODO
                 if name == "tvshow.nfo" {
                     let mut nfo_path = PathBuf::from(&dir);
                     nfo_path.push(name);
                     self.nfo_path = Some(nfo_path);
                     continue;
-                }
+                }*/
 
                 // other images.
                 if let Some(s) = IS_IMAGE.captures(name) {
@@ -135,8 +168,11 @@ impl Item {
                     match &s[1] {
                         "season-all-banner" => self.season_all_banner = Some(p),
                         "season-all-poster" => self.season_all_poster = Some(p),
+                        "season-specials-banner" => self.season_specials_banner = Some(p),
+                        "season-specials-poster" => self.season_specials_poster = Some(p),
                         "banner" => self.banner = Some(p),
                         "fanart" => self.fanart = Some(p),
+                        // Note, folder is probably an alias for poster
                         "folder" => self.folder = Some(p),
                         "poster" => self.poster = Some(p),
                         _ => {},
@@ -148,7 +184,7 @@ impl Item {
             // because they need context.
             if let Some(season_hint) = season_hint {
                 if let Some(s) = IS_IMAGE.captures(name) {
-                    let p = join_and_escape_path(subdir, name);
+                    let p = join_paths(subdir, name);
                     match &s[1] {
                         "banner" =>{
                             let idx = self.get_season(season_hint);
@@ -169,7 +205,7 @@ impl Item {
             if let Some(s) = IS_SEASON_IMG.captures(name) {
                 let sn = s[1].parse::<u32>().unwrap_or(0);
                 let idx = self.get_season(sn);
-                let p = join_and_escape_path(subdir, name);
+                let p = join_paths(subdir, name);
                 match &s[2] {
                     "poster" => self.seasons[idx].poster = Some(p),
                     "banner" => self.seasons[idx].banner = Some(p),
@@ -182,53 +218,60 @@ impl Item {
             }
 
             // episodes can be in main dir or subdir.
-            if let Some(s) = IS_VIDEO.captures(name) {
-                let mut ep = Episode {
-                    video: join_and_escape_path(subdir, name),
-                    basename: s[1].to_string(),
-                    ..Episode::default()
-                };
-                ep.video_ts = match entry.metadata().await {
-                    Ok(m) => systemtime_to_ms(m.modified().unwrap()),
-                    Err(_) => 0,
-                };
+            let s = match IS_VIDEO.captures(name) {
+                Some(s) => s,
+                None => continue,
+            };
 
-                if let Some(ep_info) = EpisodeNameInfo::parse(&s[1], season_hint) {
+            // Parse the episode filename for season and episode number etc.
+            let ep_info = match EpisodeNameInfo::parse(&s[1], season_hint) {
+                Some(ep_info) => ep_info,
+                None => continue,
+            };
 
-                    // Is it a double entry? (dup mp4s in different dirs)
-                    if let Some(epm) = ep_map.get(&s[1]) {
+            let p = join_paths(subdir, name);
+            let video = match FileInfo::from_path(&p) {
+                Ok(v) => sqlx::types::Json(v),
+                Err(_) => continue,
+            };
+            let mut ep = Episode {
+                video,
+                ..Episode::default()
+            };
 
-                        // If it already has related files, dont overwrite.
-                        let ep = self.get_episode(epm.season_idx, epm.episode_idx);
-                        if ep.nfo.is_some() || ep.thumb.is_some() {
-                            continue;
-                        }
+            // Is it a double entry? (dup mp4s in different dirs)
+            if let Some(epm) = ep_map.get(&s[1]) {
 
-                        // Or, if we are in the wrong dir, ignore.
-                        if Some(ep_info.seasonno) != season_hint {
-                            continue;
-                        }
-
-                        // OK, replace.
-                        self.seasons[epm.season_idx].episodes.remove(epm.episode_idx);
-                        ep_map.remove(&s[1]);
-                    }
-
-                    // Add info from the filename.
-                    ep.name = ep_info.name;
-                    ep.seasonno = ep_info.seasonno;
-                    ep.episodeno = ep_info.episodeno;
-                    ep.double = ep_info.double;
-
-                    // Add this episode to the season.
-                    let season_idx = self.get_season(ep.seasonno);
-                    self.seasons[season_idx].episodes.push(ep);
-
-                    // And remember basename -> season_idx, episode_idx mapping.
-                    let episode_idx = self.seasons[season_idx].episodes.len() - 1;
-                    ep_map.insert(s[1].to_string(), EpMap { season_idx, episode_idx });
+                // If it already has related files, dont overwrite.
+                let ep = self.get_episode(epm.season_idx, epm.episode_idx);
+                if ep.nfofile.is_some() || ep.thumb.0.len() > 0 {
+                    continue;
                 }
+
+                // Or, if we are in the wrong dir, ignore.
+                if Some(ep_info.seasonno) != season_hint {
+                    continue;
+                }
+
+                // OK, replace.
+                self.seasons[epm.season_idx].episodes.remove(epm.episode_idx);
+                ep_map.remove(&s[1]);
             }
+
+            // Add info from the filename.
+            // XXX TODO we might want to read the NFO first then set title as backup
+            ep.nfo_base.title = Some(ep_info.name);
+            ep.season = ep_info.seasonno;
+            ep.episode = ep_info.episodeno;
+            // XXX TODO ep.double = ep_info.double;
+
+            // Add this episode to the season.
+            let season_idx = self.get_season(ep.season as u32);
+            self.seasons[season_idx].episodes.push(ep);
+
+            // And remember basename -> season_idx, episode_idx mapping.
+            let episode_idx = self.seasons[season_idx].episodes.len() - 1;
+            ep_map.insert(s[1].to_string(), EpMap { season_idx, episode_idx });
         }
 
         // Now scan the directory again for episode-related files.
@@ -263,15 +306,17 @@ impl Item {
             };
 
             let ep = self.get_episode_mut(season_idx, episode_idx);
-            let p = join_and_escape_path(subdir, name);
+            let p = join_paths(subdir, name);
 
+            /* XXX FIXME Thumb
             if IS_IMAGE.is_match(&name) {
                 if ext == "tbn" || aux == "thumb" {
                     ep.thumb = Some(p);
                 }
                 continue
-            }
+            }*/
 
+            /* // XXX FIXME subtitles.
             if ext == "srt" {
                 if aux == "" || aux == "und" {
                     aux = "zz".to_string();
@@ -293,7 +338,9 @@ impl Item {
                 });
                 continue;
             }
+            */
 
+            /* XXX FIXME TODO
             if ext == "nfo" {
                 let mut nfo_path = PathBuf::from(basedir);
                 if let Some(s) = subdir {
@@ -302,29 +349,32 @@ impl Item {
                 nfo_path.push(name);
                 ep.nfo_path = Some(nfo_path);
                 continue;
-            }
+            }*/
         }
     }
 
-    async fn build_show(coll: &Collection, dir: &str) -> Option<Item> {
+    async fn build_show(coll: &Collection, dir: &str) -> Option<TVShow> {
 
-        let mut item = Item {
-            name: dir.split('/').last().unwrap().to_string(),
-            baseurl: coll.baseurl.clone(),
-            path: escape_path(dir),
-            type_: "show".to_string(),
-            ..Item::default()
+        let tvshow = TVShow {
+            collection_id: coll.collection_id as i64,
+            directory: sqlx::types::Json(FileInfo::from_path(dir).ok()?),
+            ..TVShow::default()
         };
+        let mut item = Show {
+            tvshow,
+            ..Show::default()
+        };
+
         let mut ep_map = HashMap::new();
         let showdir = format!("{}/{}", coll.directory, dir);
         item.show_scan_dir(&showdir, None, &mut ep_map, None).await;
 
         for season_idx in 0 .. item.seasons.len() {
             // remove episodes without video
-            item.seasons[season_idx].episodes.retain(|e| e.video != "");
+            item.seasons[season_idx].episodes.retain(|e| e.video.0.path != "");
 
             // Then sort episodes.
-            item.seasons[season_idx].episodes.sort_by_key(|e| e.episodeno);
+            item.seasons[season_idx].episodes.sort_by_key(|e| e.episode);
         }
 
         // remove seasons without episodes
@@ -337,14 +387,15 @@ impl Item {
         if item.seasons.len() > 0 {
             let fs = &item.seasons[0];
             let ls = &item.seasons[item.seasons.len() - 1];
-            item.firstvideo = fs.episodes[0].video_ts;
-            item.lastvideo = ls.episodes[ls.episodes.len() - 1].video_ts;
+            // XXX FIXME firstvideo lastvideo
+            // item.firstvideo = fs.episodes[0].video_ts;
+            // item.lastvideo = ls.episodes[ls.episodes.len() - 1].video_ts;
         }
 
         // If we have an NFO and at least one image, accept it.
         let mut ok = false;
-        if item.nfo_path.is_some() &&
-           (item.fanart.is_some() || item.poster.is_some() || item.thumb.is_some()) {
+        if item.tvshow.nfofile.is_some() &&
+           (item.fanart.is_some() || item.poster.is_some()) {
             ok = true;
         }
 
@@ -357,10 +408,8 @@ impl Item {
             return None;
         }
 
-        // XXX
-        // db_load_item(coll, item);
-
-        Some(item)
+        // XXX FIXME TODO update show --> tvshow before returning.
+        Some(item.tvshow)
     }
 }
 
@@ -431,3 +480,11 @@ impl EpisodeNameInfo {
     }
 }
 
+fn join_paths(dir: Option<&str>, file: &str) -> String {
+    match dir {
+        Some(dir) if dir != "" && dir != "." && dir != "./" => {
+            format!("{}/{}", dir, file)
+        },
+        Some(_) | None => file.to_string(),
+    }
+}

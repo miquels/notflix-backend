@@ -3,14 +3,14 @@ use serde::Serialize;
 use crate::db::DbHandle;
 use super::nfo::build_struct;
 use super::misc::{Actor, FileInfo, Rating, Thumb, Fanart, UniqueId};
-use super::{NfoBase, NfoMovie, J, JV, SqlU32, SqlU64, is_default};
+use super::{NfoBase, NfoMovie, J, JV, is_default};
 
 #[derive(Serialize, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
 pub struct TVShow {
     // Common.
-    pub id: SqlU64,
-    pub collection_id: SqlU64,
+    pub id: i64,
+    pub collection_id: i64,
     #[serde(skip_serializing)]
     pub directory: sqlx::types::Json<FileInfo>,
     #[serde(skip_serializing_if = "is_default")]
@@ -34,18 +34,19 @@ pub struct TVShow {
 
     // TVShow
     #[serde(skip_serializing_if = "is_default")]
-    pub seasons: Option<SqlU32>,
+    pub seasons: Option<u32>,
     #[serde(skip_serializing_if = "is_default")]
-    pub episodes: Option<SqlU32>,
+    pub episodes: Option<u32>,
     #[serde(skip_serializing_if = "is_default")]
     pub status: Option<String>,
 }
 
 impl TVShow {
-    pub async fn select_one(dbh: &DbHandle, id: SqlU64) -> Option<TVShow> {
+    pub async fn select_one(dbh: &DbHandle, id: i64) -> Option<TVShow> {
         let r = sqlx::query!(
             r#"
-                SELECT i.id, i.collection_id,
+                SELECT i.id AS "id: i64",
+                       i.collection_id AS "collection_id: i64",
                        i.directory AS "directory!: J<FileInfo>",
                        i.dateadded,
                        i.nfofile AS "nfofile?: J<FileInfo>",
@@ -64,8 +65,8 @@ impl TVShow {
                        m.studio AS "studio!: JV<String>",
                        m.premiered,
                        m.mpaa,
-                       m.seasons,
-                       m.episodes,
+                       m.seasons AS "seasons: u32",
+                       m.episodes AS "episodes: u32",
                        m.status
                 FROM mediaitems i
                 JOIN tvshows m ON m.mediaitem_id = i.id

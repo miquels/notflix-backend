@@ -1,14 +1,26 @@
+use std::os::unix::fs::MetadataExt;
 use futures_util::TryStreamExt;
 use serde::{Deserialize, Serialize};
 
 use crate::db::DbHandle;
-use super::{SqlU64, is_default};
+use super::is_default;
 
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
 pub struct FileInfo {
-    path:   String,
-    inode:  u64,
-    size:   u64,
+    pub path:   String,
+    pub inode:  u64,
+    pub size:   u64,
+}
+
+impl FileInfo {
+    pub fn from_path(path: &str) -> std::io::Result<FileInfo> {
+        let m = std::fs::metadata(path)?;
+        Ok(FileInfo {
+            path: path.to_string(),
+            inode: m.ino(),
+            size: m.len(),
+        })
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
@@ -26,9 +38,15 @@ pub struct Actor {
     pub thumb_url:  Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
+/// Image
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default)]
 pub struct Thumb {
+    #[serde(rename(deserialize = "$value"))]
+    pub path:     String,
+    pub aspect:   String,
+    #[serde(skip_serializing_if = "is_default")]
+    pub preview:  Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Default, Debug, PartialEq)]
@@ -72,7 +90,7 @@ fn has_uid(uids: &Vec<UniqueId>, idtype: &str, id: &str) -> bool {
 
 #[derive(Default)]
 pub struct FindItemBy<'a> {
-    pub id: Option<SqlU64>,
+    pub id: Option<i64>,
     pub imdb: Option<&'a str>,
     pub tmdb: Option<&'a str>,
     pub tvdb: Option<&'a str>,
@@ -87,7 +105,7 @@ impl<'a> FindItemBy<'a> {
         FindItemBy::default()
     }
 
-    pub(crate) fn is_only_id(&self) -> Option<SqlU64> {
+    pub(crate) fn is_only_id(&self) -> Option<i64> {
         if let Some(id) = self.id {
             if self.imdb.is_none() &&
                 self.imdb.is_none() &&
@@ -104,7 +122,7 @@ impl<'a> FindItemBy<'a> {
     // TODO: if multiple matches, return the one we trust most (a match on 'id'
     //       has 100% trust, ofcourse).
     //       Later, return a Vec of (id, matched_on, trust) instead of just one value.
-    pub(crate) async fn lookup(&self, dbh: &DbHandle) -> Option<SqlU64> {
+    pub(crate) async fn lookup(&self, dbh: &DbHandle) -> Option<i64> {
 
         // If we match on id, return right away.
         // It's basically just a test 'is this entry in the db'.
@@ -126,7 +144,7 @@ impl<'a> FindItemBy<'a> {
 
         #[derive(sqlx::FromRow)]
         struct Result {
-            id: SqlU64,
+            id: i64,
             directory: sqlx::types::Json<FileInfo>,
             title: Option<String>,
             pub uniqueids: sqlx::types::Json<Vec<UniqueId>>,

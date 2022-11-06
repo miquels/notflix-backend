@@ -22,6 +22,3 @@ where
     *t == T::default()
 }
 
-pub type SqlU32 = i64;
-pub type SqlU64 = i64;
-

@@ -70,6 +70,10 @@ impl Collection {
 
     /// Get item details.
     pub async fn get_item(&self, name: &str) -> Option<Arc<Item>> {
+        todo!();
+    }
+    /*
+    pub async fn get_item(&self, name: &str) -> Option<Arc<Item>> {
         // Find item.
         let item = self.items.lock().unwrap().iter().map(|i| i.load()).find(|i| i.name == name)?;
 
@@ -115,6 +119,7 @@ impl Collection {
         }
         None
     }
+    */
 }
 
 // An 'item' can be a movie, a tv-show, a folder, etc.

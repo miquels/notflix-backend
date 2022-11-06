@@ -124,7 +124,7 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
             let file_name = m.next().unwrap();
             coll.directory = m.next().unwrap_or(".").to_string();
 
-            match kodifs::build_movie(&mut coll, file_name).await {
+            match kodifs::build_movie(&mut coll, file_name, true).await {
                 Some(item) => println!("{}", serde_json::to_string_pretty(&item)?),
                 None => println!("no movie found"),
             }

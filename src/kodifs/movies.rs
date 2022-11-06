@@ -1,14 +1,19 @@
+#[allow(dead_code)]
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
+use std::os::unix::fs::MetadataExt;
 
-use arc_swap::ArcSwap;
 use tokio::fs;
 
 use crate::collections::*;
+use crate::models::{FileInfo, Movie, Thumb};
 use super::*;
 
 pub async fn build_movies(coll: &Collection, pace: u32) {
+    todo!()
+}
+
+/*
+pub async fn update_movies(db: &DataBase, coll: &Collection, pace: u32) {
 
     let mut d = match fs::read_dir(&coll.directory).await {
         Ok(d) => d,
@@ -17,6 +22,13 @@ pub async fn build_movies(coll: &Collection, pace: u32) {
     let mut items = Vec::new();
 
     while let Ok(Some(entry)) = d.next_entry().await {
+
+        // We might want to pace ourselves.
+        if pace > 0 {
+            tokio::time::sleep(Duration::from_secs(pace as u64)).await;
+        }
+
+        // Get a valid filename.
         let file_name = entry.file_name();
         let name = match file_name.to_str() {
             Some(name) => name,
@@ -26,146 +38,187 @@ pub async fn build_movies(coll: &Collection, pace: u32) {
             continue;
         }
 
-        if let Some(m) = Item::build_movie(coll, name, false).await {
-            items.push(ArcSwap::new(Arc::new(m)));
+        // Do we have this in the database? Check by filename.
+        if let Some(dbitem) = db.find_basic_info_by_path(coll, name).await {
+            update_movie(coll, Some(dbitem), None);
+            continue;
         }
-        if pace > 0 {
-            tokio::time::sleep(Duration::from_secs(pace as u64)).await;
+
+        // We don't. So read the directory.
+        if let Some(movie) = build_movie(coll, name, true).await {
+            update_movie(coll, None, Some(movie));
         }
     }
-
-    *coll.items.lock().unwrap() = items;
 }
+*/
 
-pub async fn build_movie(coll: &Collection, name: &str) -> Option<Item> {
-    Item::build_movie(coll, name, true).await
-}
+pub async fn build_movie(coll: &Collection, name: &str, parse_nfo: bool) -> Option<Movie> {
 
-impl Item {
-    async fn build_movie(coll: &Collection, name: &str, parse_nfo: bool) -> Option<Item> {
-        let mut dirname = PathBuf::from(&coll.directory);
-        dirname.push(name);
-        // println!("XXX {}/{} -> {:?}", coll.directory, name, dirname);
+    // First get all directory entries.
+    let mut dirname = PathBuf::from(&coll.directory);
+    dirname.push(name);
+    // println!("XXX {}/{} -> {:?}", coll.directory, name, dirname);
 
-        let mut d = match fs::read_dir(&dirname).await {
-            Ok(d) => d,
-            Err(_) => return None,
+    let mut d = match fs::read_dir(&dirname).await {
+        Ok(d) => d,
+        Err(_) => return None,
+    };
+    let mut entries = Vec::new();
+    while let Ok(Some(entry)) = d.next_entry().await {
+        entries.push(entry);
+    }
+
+    // Collect timestamps.
+    let mut added_vec = Vec::new();
+    let meta = tokio::fs::metadata(&dirname).await.ok()?;
+    let modified = meta.modified().ok()?;
+    added_vec.push(modified);
+    if let Ok(created) = meta.created() {
+        added_vec.push(created);
+    }
+
+    // Loop over all directory entries. We need to find a video file.
+    // If we don't, skip the entire directory.
+    let mut video = String::new();
+    let mut base = String::new();
+    for entry in &entries {
+        let file_name = entry.file_name();
+        let file_name = match file_name.to_str() {
+            Some(name) => name,
+            None => continue,
         };
-        let mut entries = Vec::new();
-        while let Ok(Some(entry)) = d.next_entry().await {
-            entries.push(entry);
+        let caps = match IS_VIDEO.captures(file_name) {
+            Some(caps) => caps,
+            None => continue,
+        };
+        match entry.metadata().await {
+            Ok(meta) => {
+                if let Ok(created) = meta.created() {
+                    added_vec.push(created);
+                }
+            },
+            Err(_) => continue,
         }
+        video = caps[0].to_string();
+        base = caps[1].to_string();
+        break;
+    }
+    if video.is_empty() {
+        return None;
+    }
 
-        // created: timestamp.
-        // video: filename of the video (the .mp4) without path
-        // base: the filename without .mp4 extension.
-        let (created, video, base) = async {
-            for entry in &entries {
-                let file_name = entry.file_name();
-                let file_name = match file_name.to_str() {
-                    Some(name) => name,
-                    None => continue,
-                };
-                let caps = match IS_VIDEO.captures(file_name) {
-                    Some(caps) => caps,
-                    None => continue,
-                };
-                let created = match entry.metadata().await {
-                    Ok(m) => m.modified().unwrap(),
-                    Err(_) => continue,
-                };
-                return Some((created, caps[0].to_string(), caps[1].to_string()));
-            }
-            None
-        }.await?;
+    // Get the year from the directory name. This will be used if we cannot
+    // find it in the NFO file.
+    // TODO FIXME also use as fall-back title.
+    let year = IS_YEAR.captures(name).map(|caps| caps[1].parse::<u32>().unwrap());
 
-        let year = match IS_YEAR.captures(name) {
-            Some(caps) => caps[1].parse::<u32>().unwrap(),
-            None => time::OffsetDateTime::from(created).year() as u32,
+    // `added_vec` contains a list of dates, use the oldest as `added`.
+    added_vec.sort();
+    // let added = (added_vec.len() > 0).then(|| DateTime<offset::Utc>::from(added_vec[0]));
+
+    // Initial Movie.
+    let mut movie = Movie {
+        collection_id: coll.collection_id as i64,
+        directory: sqlx::types::Json(FileInfo {
+            path: name.to_string(),
+            inode: meta.ino(),
+            size: meta.len(),
+        }),
+        // XXX TODO dateadded: DateTime::offset::Utc::from(created),
+        ..Movie::default()
+    };
+
+    // Loop over all directory entries.
+    for entry in &entries {
+        let file_name = entry.file_name();
+        let name = match file_name.to_str() {
+            Some(name) => name,
+            None => continue,
         };
 
-        let mut movie = Item {
-            name: name.to_string(),
-            year: Some(year),
-            baseurl: coll.baseurl.clone(),
-            path: escape_path(name),
-            video: escape_path(&video),
-            firstvideo: systemtime_to_ms(created),
-            lastvideo: systemtime_to_ms(created),
-            type_: "movie".to_string(),
-            ..Item::default()
-        };
+        let mut aux = String::new();
+        let mut ext = String::new();
 
-        for entry in &entries {
-            let file_name = entry.file_name();
-            let name = match file_name.to_str() {
-                Some(name) => name,
-                None => continue,
-            };
-
-            let mut aux = String::new();
-            let mut ext = String::new();
-
-            match IS_EXT1.captures(name) {
-                Some(caps) => {
-                    ext = caps[3].to_string();
-                    if &caps[1] != base {
-                        aux = caps[1].to_string();
-                        if let Some(caps) = IS_EXT2.captures(name) {
-                            if &caps[1] == base {
-                                aux = caps[2].to_string();
-                                ext = caps[3].to_string();
-                            }
-                        }
-                    }
-                },
-                None => {
+        // poster.jpg
+        match IS_EXT1.captures(name) {
+            Some(caps) => {
+                ext = caps[3].to_string();
+                if &caps[1] != base {
+                    aux = caps[1].to_string();
                     if let Some(caps) = IS_EXT2.captures(name) {
                         if &caps[1] == base {
                             aux = caps[2].to_string();
                             ext = caps[3].to_string();
                         }
                     }
-                },
-            }
-
-            if ext == "" {
-                continue;
-            }
-            let p = escape_path(name);
-
-            if IS_IMAGE.is_match(name) {
-                if ext == "tbn" && aux == "" {
-                        aux = "poster".to_string();
                 }
-                match aux.as_str() {
-                    "banner" => movie.banner = Some(p),
-                    "fanart" => movie.fanart = Some(p),
-                    "folder" => movie.folder = Some(p),
-                    "poster" => movie.poster = Some(p),
-                    _ => continue,
-                }
-            }
-
-            if ext == "nfo" {
-                let mut nfo_path = PathBuf::from(&coll.directory);
-                nfo_path.push(&dirname);
-                nfo_path.push(name);
-                if parse_nfo {
-                    if let Ok(mut file) = fs::File::open(&nfo_path).await {
-                        match super::Nfo::read(&mut file).await {
-                            Ok(nfo) => movie.nfo = Some(nfo),
-                            Err(e) => println!("error reading nfo: {}", e),
-                        }
+            },
+            None => {
+                // big.bucks.bunny-poster.jpg
+                if let Some(caps) = IS_EXT2.captures(name) {
+                    if &caps[1] == base {
+                        aux = caps[2].to_string();
+                        ext = caps[3].to_string();
                     }
                 }
-                movie.nfo_path = Some(nfo_path);
-            }
+            },
         }
 
-        // XXX TODO
-        // db_load_item(coll, movie).await;
+        if ext == "" {
+            continue;
+        }
 
-        Some(movie)
+        // Image: banner, fanart, folder, poster etc
+        if IS_IMAGE.is_match(name) {
+            if ext == "tbn" && aux == "" {
+                    aux = "poster".to_string();
+            }
+            let aspect = match aux.as_str() {
+                "banner" |
+                "fanart" |
+                "poster" |
+                "landscape" |
+                "clearart" |
+                "clearlogo" => aux,
+                _ => continue,
+            };
+            movie.thumb.push(Thumb {
+                path: name.to_string(),
+                aspect: aspect.to_string(),
+                preview: None,
+            });
+        }
+
+        // NFO file found. Parse it.
+        if ext == "nfo" {
+            let mut inode = 0;
+            let mut size = 0;
+            let mut nfo_path = PathBuf::from(&coll.directory);
+            nfo_path.push(&dirname);
+            nfo_path.push(name);
+            if parse_nfo {
+                if let Ok(mut file) = fs::File::open(&nfo_path).await {
+                    match super::Nfo::read(&mut file).await {
+                        Ok(nfo) => {
+                            nfo.update_movie(&mut movie);
+                            if movie.nfo_movie.premiered.is_none() && year.is_some() {
+                                movie.nfo_movie.premiered = Some(format!("{}-01-01", year.unwrap()));
+                            }
+                            let m = file.metadata().await.unwrap();
+                            inode = m.ino();
+                            size = m.len();
+                        },
+                        Err(e) => println!("error reading nfo: {}", e),
+                    }
+                }
+            }
+            movie.nfofile = Some(sqlx::types::Json(FileInfo {
+                path: nfo_path.to_str().unwrap().to_string(),
+                inode,
+                size,
+            }));
+        }
     }
+
+    Some(movie)
 }

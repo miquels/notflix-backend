@@ -3,14 +3,14 @@ use serde::Serialize;
 use crate::db::DbHandle;
 use super::nfo::build_struct;
 use super::misc::{FindItemBy, FileInfo, Rating, Thumb, Fanart, UniqueId, Actor};
-use super::{NfoBase, NfoMovie, J, JV, SqlU32, SqlU64, is_default};
+use super::{NfoBase, NfoMovie, J, JV, is_default};
 
 #[derive(Serialize, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
 pub struct Movie {
     // Common.
-    pub id: SqlU64,
-    pub collection_id: SqlU64,
+    pub id: i64,
+    pub collection_id: i64,
     #[serde(skip_serializing)]
     pub directory: sqlx::types::Json<FileInfo>,
     #[serde(skip_serializing_if = "is_default")]
@@ -32,11 +32,13 @@ pub struct Movie {
     #[serde(flatten)]
     pub nfo_movie: NfoMovie,
 
-    // Movie
+    // Movie NFO
+    #[serde(skip_serializing_if = "is_default")]
+    pub runtime: Option<u32>,
+
+    // Movie specific data.
     #[serde(skip_serializing)]
     pub video: sqlx::types::Json<FileInfo>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub runtime: Option<SqlU32>,
 }
 
 impl Movie {
@@ -47,7 +49,8 @@ impl Movie {
         };
         let r = sqlx::query!(
             r#"
-                SELECT i.id, i.collection_id,
+                SELECT i.id AS "id: i64",
+                       i.collection_id AS "collection_id: i64",
                        i.directory AS "directory!: J<FileInfo>",
                        i.dateadded,
                        i.nfofile AS "nfofile?: J<FileInfo>",
@@ -66,7 +69,7 @@ impl Movie {
                        m.studio AS "studio!: JV<String>",
                        m.premiered,
                        m.mpaa,
-                       m.runtime,
+                       m.runtime AS "runtime: u32",
                        m.video AS "video: J<FileInfo>"
                 FROM mediaitems i
                 JOIN movies m ON (m.mediaitem_id = i.id)

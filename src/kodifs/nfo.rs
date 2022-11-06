@@ -17,7 +17,7 @@ use serde_xml_rs::from_str;
 
 use crate::collections::Item;
 use crate::kodifs::systemtime_to_ms;
-use crate::models::{self, NfoBase, NfoMovie, SqlU32};
+use crate::models::{self, NfoBase, NfoMovie};
 
 /// Thumbnail
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -47,8 +47,8 @@ pub struct Fanart {
 pub struct UniqueId {
     #[serde(skip_serializing_if = "Option::is_none", rename="type")]
     pub idtype:  Option<String>,
-    #[serde(skip_serializing_if = "not_true")]
-    pub default: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_bool")]
+    pub default: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none", rename(deserialize = "$value"))]
     pub id:   Option<String>,
 }
@@ -59,7 +59,7 @@ pub struct UniqueId {
 pub struct Actor {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name:   Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub role:   Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_u32")]
     pub order: Option<u32>,
@@ -97,14 +97,27 @@ pub struct VideoDetails {
     pub height:  Option<u32>,
 }
 
+/// Ratings.
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(default)]
+pub struct Ratings {
+    rating: Vec<Rating>,
+}
+
+impl Ratings {
+    fn is_empty(&self) -> bool {
+        self.rating.is_empty()
+    }
+}
+
 /// Rating from a certain source ('name' can be imdb, tmdb, etc)
 #[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(default)]
 pub struct Rating {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name:   Option<String>,
-    #[serde(skip_serializing_if = "not_true")]
-    pub default: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_bool")]
+    pub default: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_u32")]
     pub max:    Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_f32")]
@@ -120,22 +133,22 @@ pub struct Nfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title:  Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub originaltitle: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub sorttitle: Option<String>,
 
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub ratings: Vec<Rating>,
+    #[serde(skip_serializing_if = "Ratings::is_empty")]
+    pub ratings: Ratings,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub outline: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub plot: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub tagline: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_runtime")]
@@ -147,7 +160,7 @@ pub struct Nfo {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub fanart: Vec<Fanart>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub mpaa: Option<String>,
 
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -165,7 +178,7 @@ pub struct Nfo {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub director: Vec<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub premiered: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_u32")]
@@ -174,10 +187,10 @@ pub struct Nfo {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub studio: Vec<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub trailer: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub status: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -198,7 +211,7 @@ pub struct Nfo {
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_u32")]
     pub displayepisode: Option<u32>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub aired: Option<String>,
 
     /// The following fields are unofficial and should not be used.
@@ -208,17 +221,17 @@ pub struct Nfo {
     pub votes: Option<u32>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub banner: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub discart: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub logo: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub imdbid: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub tmdbid: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub tvdbid: Option<String>,
 }
 
@@ -242,6 +255,13 @@ impl Nfo {
         }
         nfo.genre = crate::genres::normalize_genres(&nfo.genre);
 
+        // Fix up empty vecs.
+        nfo.credits.retain(|s| s.len() > 0);
+        nfo.director.retain(|s| s.len() > 0);
+        nfo.country.retain(|s| s.len() > 0);
+        nfo.studio.retain(|s| s.len() > 0);
+
+        println!("{:#?}", nfo);
         Ok(nfo)
     }
 
@@ -272,10 +292,11 @@ impl Nfo {
     /// Fill `NfoBase` with data from the nfo file.
     pub fn to_nfo_base(&self) -> NfoBase {
         let mut ratings = self.ratings
+            .rating
             .iter()
             .map(|r| models::Rating {
                 name: r.name.clone(),
-                default: r.default.as_ref().map(|d| d == "true"),
+                default: r.default.clone(),
                 max: r.max,
                 value: r.value,
                 votes: r.votes,
@@ -286,7 +307,7 @@ impl Nfo {
             .filter(|i| i.id.is_some())
             .map(|i| models::UniqueId {
                 idtype: i.idtype.clone(),
-                default: i.default.as_ref().map(|d| d == "true").unwrap_or(false),
+                default: i.default.unwrap_or(false),
                 id: i.id.clone().unwrap(),
             })
             .collect::<Vec<_>>();
@@ -387,23 +408,23 @@ impl Nfo {
     pub fn update_movie(&self, item: &mut models::Movie) {
         item.nfo_base = self.to_nfo_base();
         item.nfo_movie = self.to_nfo_movie();
-        item.runtime = self.runtime.clone().map(|r| r as SqlU32);
+        item.runtime = self.runtime.clone();
     }
 
     pub fn update_tvshow(&self, item: &mut models::TVShow) {
         item.nfo_base = self.to_nfo_base();
         item.nfo_movie = self.to_nfo_movie();
-        item.seasons = self.season.clone().map(|r| r as SqlU32);
-        item.episodes = self.episode.clone().map(|r| r as SqlU32);
+        item.seasons = self.season.clone();
+        item.episodes = self.episode.clone();
         item.status = self.status.clone();
     }
 
     pub fn update_episode(&self, item: &mut models::Episode) {
         item.nfo_base = self.to_nfo_base();
-        item.runtime = self.runtime.clone().map(|r| r as SqlU32);
+        item.runtime = self.runtime.clone();
         item.aired = self.status.clone();
-        item.displayseason = self.displayseason.clone().map(|r| r as SqlU32);
-        item.displayepisode = self.displayepisode.clone().map(|r| r as SqlU32);
+        item.displayseason = self.displayseason.clone();
+        item.displayepisode = self.displayepisode.clone();
     }
 }
 
@@ -423,6 +444,22 @@ where
 {
     let s = String::deserialize(deserializer)?;
     Ok(s.parse::<u32>().ok())
+}
+
+fn deserialize_bool<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    Ok(if s == "true" || s == "True" { Some(true) } else { None })
+}
+
+fn deserialize_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    Ok(if s.len() > 0 { Some(s) } else { None })
 }
 
 // Decode the "runtime" field. Should be in minutes, but ..
@@ -450,8 +487,4 @@ where
         return Ok(Some(h * 60 + m));
     }
     Ok(None)
-}
-
-fn not_true(s: &Option<String>) -> bool {
-    s.as_ref().map(|v| v != "true").unwrap_or(true)
 }

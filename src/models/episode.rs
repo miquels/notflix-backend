@@ -3,14 +3,14 @@ use serde::Serialize;
 use crate::db::DbHandle;
 use super::nfo::build_struct;
 use super::misc::{FileInfo, Rating, Thumb, Fanart, UniqueId, Actor};
-use super::{J, JV, NfoBase, SqlU32, SqlU64, is_default};
+use super::{J, JV, NfoBase, is_default};
 
 #[derive(Serialize, serde::Deserialize, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
 pub struct Episode {
     // Common.
-    pub id: SqlU64,
-    pub collection_id: SqlU64,
+    pub id: i64,
+    pub collection_id: i64,
     #[serde(skip_serializing)]
     pub directory: sqlx::types::Json<FileInfo>,
     #[serde(skip_serializing_if = "is_default")]
@@ -31,24 +31,25 @@ pub struct Episode {
     #[serde(skip_serializing_if = "is_default")]
     pub aired: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
-    pub runtime: Option<SqlU32>,
+    pub runtime: Option<u32>,
     #[serde(skip_serializing_if = "is_default")]
-    pub displayseason: Option<SqlU32>,
+    pub displayseason: Option<u32>,
     #[serde(skip_serializing_if = "is_default")]
-    pub displayepisode: Option<SqlU32>,
+    pub displayepisode: Option<u32>,
 
     // Episode
     #[serde(skip_serializing)]
     pub video: sqlx::types::Json<FileInfo>,
-    pub season: SqlU32,
-    pub episode: SqlU32,
+    pub season: u32,
+    pub episode: u32,
 }
 
 impl Episode {
-    pub async fn select_one(dbh: &DbHandle, id: SqlU64) -> Option<Episode> {
+    pub async fn select_one(dbh: &DbHandle, id: i64) -> Option<Episode> {
         let r = sqlx::query!(
             r#"
-                SELECT i.id, i.collection_id,
+                SELECT i.id AS "id: i64",
+                       i.collection_id AS "collection_id: i64",
                        i.directory AS "directory!: J<FileInfo>",
                        i.dateadded,
                        i.nfofile AS "nfofile?: J<FileInfo>",
@@ -61,9 +62,12 @@ impl Episode {
                        i.credits AS "credits!: JV<String>",
                        i.directors AS "directors!: JV<String>",
                        m.video AS "video!: J<FileInfo>",
-                       m.season, m.episode,
-                       m.aired, m.runtime,
-                       m.displayseason, m.displayepisode
+                       m.season AS "season: u32",
+                       m.episode AS "episode: u32",
+                       m.aired,
+                       m.runtime AS "runtime: u32",
+                       m.displayseason AS "displayseason: u32",
+                       m.displayepisode AS "displayepisode: u32"
                 FROM mediaitems i
                 JOIN episodes m ON (m.mediaitem_id = i.id)
                 WHERE i.id = ? AND i.deleted = 0"#,
