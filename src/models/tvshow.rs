@@ -39,7 +39,7 @@ pub struct TVShow {
     pub status: Option<String>,
 
     #[sqlx(default)]
-    pub episodes: Vec<Episode>,
+    pub seasons: Vec<Season>,
 }
 
 impl TVShow {
@@ -224,3 +224,8 @@ impl TVShow {
     }
 }
 
+#[derive(Serialize, Default, Debug, sqlx::FromRow)]
+pub struct Season {
+    pub season:   u32,
+    pub episodes: Vec<Episode>,
+}

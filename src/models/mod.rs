@@ -6,7 +6,7 @@ mod nfo;
 mod fileinfo;
 
 pub use movie::Movie;
-pub use tvshow::TVShow;
+pub use tvshow::{TVShow, Season};
 pub use episode::Episode;
 pub use fileinfo::FileInfo;
 pub use misc::*;

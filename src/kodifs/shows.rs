@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::fs;
 
 use crate::collections::Collection;
-use crate::models::{TVShow, Thumb, Episode, FileInfo};
+use crate::models::{TVShow, Season, Thumb, Episode, FileInfo};
 use super::*;
 
 #[derive(Debug)]
@@ -51,51 +51,29 @@ pub async fn build_shows(coll: &Collection, pace: u32) {
 }
 */
 
-pub async fn build_show(coll: &Collection, name: &str) -> Option<Show> {
+pub async fn build_show(coll: &Collection, name: &str) -> Option<TVShow> {
     Show::build_show(coll, name).await
-}
-
-#[derive(serde::Serialize, Debug, Default)]
-struct Season {
-    pub seasonno:   u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub banner: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub fanart: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub poster: Option<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub episodes: Vec<Episode>,
 }
 
 #[derive(serde::Serialize, Default, Debug)]
 pub struct Show {
     tvshow:  TVShow,
     seasons: Vec<Season>,
-    // db:      DataBase,
-    banner:  Option<String>,
-    fanart:  Option<String>,
-    folder:  Option<String>,
-    poster:  Option<String>,
-    season_all_banner:  Option<String>,
-    season_all_poster:  Option<String>,
-    season_specials_banner:  Option<String>,
-    season_specials_poster:  Option<String>,
 }
 
 impl Show {
 
-    // Look up season by seasonno. If not present, create,
-    fn get_season(&mut self, seasonno: u32) -> usize {
+    // Look up season by season. If not present, create,
+    fn get_season(&mut self, season: u32) -> usize {
         // find the season.
         for idx in 0 .. self.seasons.len() {
-            if seasonno == self.seasons[idx].seasonno {
+            if season == self.seasons[idx].season {
                 return idx;
             }
         }
 
         // not present yet, so add.
-        let sn = Season { seasonno, ..Season::default() };
+        let sn = Season { season, ..Season::default() };
         self.seasons.push(sn);
 
         self.seasons.len() - 1
@@ -180,15 +158,18 @@ impl Show {
                         "season-specials-banner" => (Some("specials"), "banner"),
                         "season-specials-poster" => (Some("specials"), "poster"),
                         "banner" | "fanart" | "folder" | "poster" => (None, base),
-                        _ => continue,
+                        _ => (None, ""),
                     };
-                    add_thumb(&mut self.tvshow.thumbs, "", subdir, name, aspect, None);
-                    continue;
+                    if aspect != "" {
+                        add_thumb(&mut self.tvshow.thumbs, "", subdir, name, aspect, season);
+                        continue;
+                    }
                 }
             }
 
-            // now things that can only be found in a subdir
-            // because they need context.
+            // now things that can only be found in a subdir because they need context.
+            // For example "poster.jpg" is a generic poster in the main directory,
+            // and a season poster in the S01/ subdirectory.
             if let Some(season) = season_hint {
                 if let Some(s) = IS_IMAGE.captures(name) {
                     let a = &s[1];
@@ -196,12 +177,12 @@ impl Show {
                         let season = format!("{}", season);
                         let season = Some(season.as_str());
                         add_thumb(&mut self.tvshow.thumbs, "", subdir, name, a, season);
+                        continue;
                     }
-                    continue;
                 }
             }
 
-            // season image can be in main dir or subdir.
+            // season image (season01-poster.jpg, etc) can be in main dir or subdir.
             if let Some(s) = IS_SEASON_IMG.captures(name) {
                 let aspect = match &s[2] {
                     "banner" | "poster" => &s[2],
@@ -242,7 +223,7 @@ impl Show {
                 }
 
                 // Or, if we are in the wrong dir, ignore.
-                if Some(ep_info.seasonno) != season_hint {
+                if Some(ep_info.season) != season_hint {
                     continue;
                 }
 
@@ -253,8 +234,8 @@ impl Show {
 
             // Add info from the filename.
             ep.nfo_base.title = Some(ep_info.name);
-            ep.season = ep_info.seasonno;
-            ep.episode = ep_info.episodeno;
+            ep.season = ep_info.season;
+            ep.episode = ep_info.episode;
             // XXX TODO ep.double = ep_info.double;
 
             // Add this episode to the season.
@@ -349,7 +330,7 @@ impl Show {
         }
     }
 
-    async fn build_show(coll: &Collection, dir: &str) -> Option<Show> {
+    async fn build_show(coll: &Collection, dir: &str) -> Option<TVShow> {
 
         let fileinfo = FileInfo::from_path(&coll.directory, "", dir).await.ok()?;
         let tvshow = TVShow {
@@ -378,7 +359,7 @@ impl Show {
         item.seasons.retain(|s| s.episodes.len() > 0);
 
         // and sort.
-        item.seasons.sort_by_key(|s| s.seasonno);
+        item.seasons.sort_by_key(|s| s.season);
 
         // Timestamp of first and last video.
         if item.seasons.len() > 0 {
@@ -393,8 +374,7 @@ impl Show {
 
         // If we have an NFO and at least one image, accept it.
         let mut ok = false;
-        if item.tvshow.nfofile.is_some() &&
-           (item.fanart.is_some() || item.poster.is_some()) {
+        if item.tvshow.nfofile.is_some() && item.tvshow.thumbs.0.len() > 0 {
             ok = true;
         }
 
@@ -407,8 +387,9 @@ impl Show {
             return None;
         }
 
-        // XXX FIXME TODO update show --> tvshow before returning.
-        Some(item)
+        let Show { mut tvshow, seasons } = item;
+        tvshow.seasons = seasons;
+        Some(tvshow)
     }
 }
 
@@ -430,8 +411,8 @@ fn add_thumb(thumbs: &mut sqlx::types::Json<Vec<Thumb>>, _dir: &str, subdir: Opt
 #[derive(Default, Debug)]
 struct EpisodeNameInfo {
     name: String,
-    seasonno: u32,
-    episodeno: u32,
+    season: u32,
+    episode: u32,
     double: bool,
 }
 
@@ -452,8 +433,8 @@ impl EpisodeNameInfo {
         const PAT1: &'static str = r#"^.*[ ._][sS]([0-9]+)[eE]([0-9]+)[ ._].*$"#;
         if let Some(caps) = regex!(PAT1).captures(name) {
             ep.name = format!("{}x{}", &caps[1], &caps[2]);
-            ep.seasonno = caps[1].parse::<u32>().unwrap_or(0);
-            ep.episodeno = caps[2].parse::<u32>().unwrap_or(0);
+            ep.season = caps[1].parse::<u32>().unwrap_or(0);
+            ep.episode = caps[2].parse::<u32>().unwrap_or(0);
             return Some(ep);
         }
 
@@ -461,8 +442,8 @@ impl EpisodeNameInfo {
         const PAT2: &'static str = r#"^.*[. _][sS]([0-9]+)[eE]([0-9]+)-?[eE]([0-9]+)[. _].*$"#;
         if let Some(caps) = regex!(PAT2).captures(name) {
             ep.name = format!("{}x{}-{}", &caps[1], &caps[2], &caps[3]);
-            ep.seasonno = caps[1].parse::<u32>().unwrap_or(0);
-            ep.episodeno = caps[2].parse::<u32>().unwrap_or(0);
+            ep.season = caps[1].parse::<u32>().unwrap_or(0);
+            ep.episode = caps[2].parse::<u32>().unwrap_or(0);
             ep.double = true;
             return Some(ep);
         }
@@ -471,9 +452,9 @@ impl EpisodeNameInfo {
         const PAT3: &'static str = r#"^.*[ .]([0-9]{4})[.-]([0-9]{2})[.-]([0-9]{2})[ .].*$"#;
         if let Some(caps) = regex!(PAT3).captures(name) {
             ep.name = format!("{}.{}.{}", &caps[1], &caps[2], &caps[3]);
-            ep.seasonno = season_hint.unwrap_or(0);
+            ep.season = season_hint.unwrap_or(0);
             let joined = format!("{}{}{}", &caps[1], &caps[2], &caps[3]);
-            ep.episodeno = joined.parse::<u32>().unwrap_or(0);
+            ep.episode = joined.parse::<u32>().unwrap_or(0);
             return Some(ep);
         }
 
@@ -483,8 +464,8 @@ impl EpisodeNameInfo {
             if let Ok(sn) = caps[1].parse::<u32>() {
                 if season_hint.is_none() || season_hint == Some(sn) {
                     ep.name = format!("{:02}x{}", sn, &caps[2]);
-                    ep.seasonno = sn;
-                    ep.episodeno = caps[2].parse::<u32>().unwrap_or(0);
+                    ep.season = sn;
+                    ep.episode = caps[2].parse::<u32>().unwrap_or(0);
                     return Some(ep);
                 }
             }
