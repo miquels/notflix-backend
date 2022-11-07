@@ -2,8 +2,8 @@ use anyhow::Result;
 use serde::Serialize;
 use crate::db::DbHandle;
 use super::nfo::build_struct;
-use super::misc::{FileInfo, Rating, Thumb, UniqueId, Actor};
-use super::{J, JV, NfoBase, is_default};
+use super::misc::{Rating, Thumb, UniqueId, Actor};
+use super::{J, JV, FileInfo, NfoBase, is_default};
 
 #[derive(Serialize, serde::Deserialize, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
