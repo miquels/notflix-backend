@@ -261,7 +261,7 @@ impl Nfo {
         nfo.country.retain(|s| s.len() > 0);
         nfo.studio.retain(|s| s.len() > 0);
 
-        println!("{:#?}", nfo);
+        //println!("{:#?}", nfo);
         Ok(nfo)
     }
 
@@ -324,8 +324,16 @@ impl Nfo {
 
         // If we have no `ratings` but we do have `rating` use that.
         if ratings.len() == 0 && self.rating.is_some() {
+            let mut idtype = Some(String::from(""));
+            if self.id.is_some() {
+                for uid in &self.uniqueid {
+                    if uid.id == self.id && uid.idtype.is_some() {
+                        idtype = uid.idtype.clone();
+                    }
+                }
+            }
             ratings.push(models::Rating {
-                name: None,
+                name: idtype,
                 default: None,
                 max: None,
                 value: self.rating.clone(),
@@ -371,7 +379,7 @@ impl Nfo {
             title: self.title.clone(),
             plot: self.plot.clone(),
             tagline: self.tagline.clone(),
-            rating: sqlx::types::Json(ratings.clone()),
+            ratings: sqlx::types::Json(ratings.clone()),
             uniqueids: sqlx::types::Json(uniqueids.clone()),
             actors: sqlx::types::Json(actors.clone()),
             credits: sqlx::types::Json(self.credits.clone()),
@@ -397,9 +405,9 @@ impl Nfo {
         NfoMovie {
             originaltitle: self.originaltitle.clone(),
             sorttitle: self.sorttitle.clone(),
-            country: sqlx::types::Json(self.country.clone()),
-            genre: sqlx::types::Json(self.genre.clone()),
-            studio: sqlx::types::Json(self.studio.clone()),
+            countries: sqlx::types::Json(self.country.clone()),
+            genres: sqlx::types::Json(self.genre.clone()),
+            studios: sqlx::types::Json(self.studio.clone()),
             premiered,
             mpaa: self.mpaa.clone(),
         }
@@ -414,8 +422,8 @@ impl Nfo {
     pub fn update_tvshow(&self, item: &mut models::TVShow) {
         item.nfo_base = self.to_nfo_base();
         item.nfo_movie = self.to_nfo_movie();
-        item.seasons = self.season.clone();
-        item.episodes = self.episode.clone();
+        item.total_seasons = self.season.clone();
+        item.total_episodes = self.episode.clone();
         item.status = self.status.clone();
     }
 

@@ -2,8 +2,8 @@ use anyhow::Result;
 use serde::Serialize;
 use crate::db::DbHandle;
 use super::nfo::build_struct;
-use super::misc::{Actor, FileInfo, Rating, Thumb, Fanart, UniqueId};
-use super::{NfoBase, NfoMovie, J, JV, is_default};
+use super::misc::{Actor, FileInfo, Rating, Thumb, UniqueId};
+use super::{Episode, NfoBase, NfoMovie, J, JV, is_default};
 
 #[derive(Serialize, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
@@ -20,9 +20,7 @@ pub struct TVShow {
 
     // Common, from filesystem scan.
     #[serde(skip_serializing_if = "is_default")]
-    pub thumb: sqlx::types::Json<Vec<Thumb>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub fanart: sqlx::types::Json<Vec<Fanart>>,
+    pub thumbs: sqlx::types::Json<Vec<Thumb>>,
 
     // Common NFO
     #[serde(flatten)]
@@ -34,11 +32,14 @@ pub struct TVShow {
 
     // TVShow
     #[serde(skip_serializing_if = "is_default")]
-    pub seasons: Option<u32>,
+    pub total_seasons: Option<u32>,
     #[serde(skip_serializing_if = "is_default")]
-    pub episodes: Option<u32>,
+    pub total_episodes: Option<u32>,
     #[serde(skip_serializing_if = "is_default")]
     pub status: Option<String>,
+
+    #[sqlx(default)]
+    pub episodes: Vec<Episode>,
 }
 
 impl TVShow {
@@ -50,23 +51,22 @@ impl TVShow {
                        i.directory AS "directory!: J<FileInfo>",
                        i.dateadded,
                        i.nfofile AS "nfofile?: J<FileInfo>",
-                       i.thumb AS "thumb!: JV<Thumb>",
-                       i.fanart AS "fanart!: JV<Fanart>",
+                       i.thumbs AS "thumbs!: JV<Thumb>",
                        i.title, i.plot, i.tagline,
-                       i.rating AS "rating!: JV<Rating>",
+                       i.ratings AS "ratings!: JV<Rating>",
                        i.uniqueids AS "uniqueids!: JV<UniqueId>",
                        i.actors AS "actors!: JV<Actor>",
                        i.credits AS "credits!: JV<String>",
                        i.directors AS "directors!: JV<String>",
                        m.originaltitle,
                        m.sorttitle,
-                       m.country AS "country!: JV<String>",
-                       m.genre AS "genre!: JV<String>",
-                       m.studio AS "studio!: JV<String>",
+                       m.countries AS "countries!: JV<String>",
+                       m.genres AS "genres!: JV<String>",
+                       m.studios AS "studios!: JV<String>",
                        m.premiered,
                        m.mpaa,
-                       m.seasons AS "seasons: u32",
-                       m.episodes AS "episodes: u32",
+                       m.seasons AS "total_seasons: u32",
+                       m.episodes AS "total_episodes: u32",
                        m.status
                 FROM mediaitems i
                 JOIN tvshows m ON m.mediaitem_id = i.id
@@ -77,12 +77,12 @@ impl TVShow {
         .await
         .ok()?;
         build_struct!(TVShow, r,
-            id, collection_id, directory, dateadded, nfofile, thumb, fanart,
-            nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.rating,
+            id, collection_id, directory, dateadded, nfofile, thumbs,
+            nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.ratings,
             nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
-            nfo_movie.originaltitle, nfo_movie.sorttitle, nfo_movie.country,
-            nfo_movie.genre, nfo_movie.studio, nfo_movie.premiered, nfo_movie.mpaa,
-            seasons, episodes, status)
+            nfo_movie.originaltitle, nfo_movie.sorttitle, nfo_movie.countries,
+            nfo_movie.genres, nfo_movie.studios, nfo_movie.premiered, nfo_movie.mpaa,
+            total_seasons, total_episodes, status)
     }
 
     pub async fn insert(&mut self, dbh: &DbHandle) -> Result<()> {
@@ -92,29 +92,27 @@ impl TVShow {
                     collection_id,
                     directory,
                     dateadded,
-                    thumb,
-                    fanart,
+                    thumbs,
                     nfofile,
                     type,
                     title,
                     plot,
                     tagline,
-                    rating,
+                    ratings,
                     uniqueids,
                     actors,
                     credits,
                     directors
-                ) VALUES(?, ?, ?, "tvshow", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES(?, ?, ?, "tvshow", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.collection_id,
             self.directory,
             self.nfofile,
             self.dateadded,
-            self.thumb,
-            self.fanart,
+            self.thumbs,
             self.nfo_base.title,
             self.nfo_base.plot,
             self.nfo_base.tagline,
-            self.nfo_base.rating,
+            self.nfo_base.ratings,
             self.nfo_base.uniqueids,
             self.nfo_base.actors,
             self.nfo_base.credits,
@@ -130,9 +128,9 @@ impl TVShow {
                     mediaitem_id,
                     originaltitle,
                     sorttitle,
-                    country,
-                    genre,
-                    studio,
+                    countries,
+                    genres,
+                    studios,
                     premiered,
                     mpaa,
                     seasons,
@@ -142,13 +140,13 @@ impl TVShow {
             self.id,
             self.nfo_movie.originaltitle,
             self.nfo_movie.sorttitle,
-            self.nfo_movie.country,
-            self.nfo_movie.genre,
-            self.nfo_movie.studio,
+            self.nfo_movie.countries,
+            self.nfo_movie.genres,
+            self.nfo_movie.studios,
             self.nfo_movie.premiered,
             self.nfo_movie.mpaa,
-            self.seasons,
-            self.episodes,
+            self.total_seasons,
+            self.total_episodes,
             self.status
         )
         .execute(dbh)
@@ -164,13 +162,12 @@ impl TVShow {
                     collection_id = ?,
                     directory = ?,
                     dateadded = ?,
-                    thumb = ?,
-                    fanart = ?,
+                    thumbs = ?,
                     nfofile = ?,
                     title = ?,
                     plot = ?,
                     tagline = ?,
-                    rating = ?,
+                    ratings = ?,
                     uniqueids = ?,
                     actors = ?,
                     credits = ?,
@@ -179,13 +176,12 @@ impl TVShow {
             self.collection_id,
             self.directory,
             self.dateadded,
-            self.thumb,
-            self.fanart,
+            self.thumbs,
             self.nfofile,
             self.nfo_base.title,
             self.nfo_base.plot,
             self.nfo_base.tagline,
-            self.nfo_base.rating,
+            self.nfo_base.ratings,
             self.nfo_base.uniqueids,
             self.nfo_base.actors,
             self.nfo_base.credits,
@@ -200,9 +196,9 @@ impl TVShow {
                 UPDATE tvshows SET
                     originaltitle = ?,
                     sorttitle = ?,
-                    country = ?,
-                    genre = ?,
-                    studio = ?,
+                    countries = ?,
+                    genres = ?,
+                    studios = ?,
                     premiered = ?,
                     mpaa = ?,
                     seasons = ?,
@@ -211,13 +207,13 @@ impl TVShow {
                 WHERE mediaitem_id = ?"#,
             self.nfo_movie.originaltitle,
             self.nfo_movie.sorttitle,
-            self.nfo_movie.country,
-            self.nfo_movie.genre,
-            self.nfo_movie.studio,
+            self.nfo_movie.countries,
+            self.nfo_movie.genres,
+            self.nfo_movie.studios,
             self.nfo_movie.premiered,
             self.nfo_movie.mpaa,
-            self.seasons,
-            self.episodes,
+            self.total_seasons,
+            self.total_episodes,
             self.status,
             self.id
         )

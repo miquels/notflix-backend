@@ -13,7 +13,7 @@ pub struct NfoBase {
     #[serde(skip_serializing_if = "is_default")]
     pub tagline: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
-    pub rating: sqlx::types::Json<Vec<Rating>>,
+    pub ratings: sqlx::types::Json<Vec<Rating>>,
     #[serde(skip_serializing_if = "is_default")]
     pub uniqueids: sqlx::types::Json<Vec<UniqueId>>,
     #[serde(skip_serializing_if = "is_default")]
@@ -33,11 +33,11 @@ pub struct NfoMovie {
     #[serde(skip_serializing_if = "is_default")]
     pub sorttitle: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
-    pub country: sqlx::types::Json<Vec<String>>,
+    pub countries: sqlx::types::Json<Vec<String>>,
     #[serde(skip_serializing_if = "is_default")]
-    pub genre: sqlx::types::Json<Vec<String>>,
+    pub genres: sqlx::types::Json<Vec<String>>,
     #[serde(skip_serializing_if = "is_default")]
-    pub studio: sqlx::types::Json<Vec<String>>,
+    pub studios: sqlx::types::Json<Vec<String>>,
     #[serde(skip_serializing_if = "is_default")]
     pub premiered: Option<String>,
     #[serde(skip_serializing_if = "is_default")]

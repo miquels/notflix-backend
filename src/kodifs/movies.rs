@@ -182,10 +182,10 @@ pub async fn build_movie(coll: &Collection, name: &str, parse_nfo: bool) -> Opti
                 "clearlogo" => aux,
                 _ => continue,
             };
-            movie.thumb.push(Thumb {
+            movie.thumbs.push(Thumb {
                 path: name.to_string(),
                 aspect: aspect.to_string(),
-                preview: None,
+                season: None,
             });
         }
 

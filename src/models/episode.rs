@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::Serialize;
 use crate::db::DbHandle;
 use super::nfo::build_struct;
-use super::misc::{FileInfo, Rating, Thumb, Fanart, UniqueId, Actor};
+use super::misc::{FileInfo, Rating, Thumb, UniqueId, Actor};
 use super::{J, JV, NfoBase, is_default};
 
 #[derive(Serialize, serde::Deserialize, Default, Debug, sqlx::FromRow)]
@@ -20,11 +20,10 @@ pub struct Episode {
 
     // Common, from filesystem scan.
     #[serde(skip_serializing_if = "is_default")]
-    pub thumb: sqlx::types::Json<Vec<Thumb>>,
-    #[serde(skip_serializing_if = "is_default")]
-    pub fanart: sqlx::types::Json<Vec<Fanart>>,
+    pub thumbs: sqlx::types::Json<Vec<Thumb>>,
 
     // Common NFO.
+    #[serde(flatten)]
     pub nfo_base: NfoBase,
 
     // Detail NFO (Episodes)
@@ -53,10 +52,9 @@ impl Episode {
                        i.directory AS "directory!: J<FileInfo>",
                        i.dateadded,
                        i.nfofile AS "nfofile?: J<FileInfo>",
-                       i.thumb AS "thumb!: JV<Thumb>",
-                       i.fanart AS "fanart!: JV<Fanart>",
+                       i.thumbs AS "thumbs!: JV<Thumb>",
                        i.title, i.plot, i.tagline,
-                       i.rating AS "rating!: JV<Rating>",
+                       i.ratings AS "ratings!: JV<Rating>",
                        i.uniqueids AS "uniqueids!: JV<UniqueId>",
                        i.actors AS "actors!: JV<Actor>",
                        i.credits AS "credits!: JV<String>",
@@ -77,8 +75,8 @@ impl Episode {
         .await
         .ok()?;
         build_struct!(Episode, r,
-            id, collection_id, directory, dateadded, nfofile, thumb, fanart,
-            nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.rating,
+            id, collection_id, directory, dateadded, nfofile, thumbs,
+            nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.ratings,
             nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
             video, season, episode, aired, runtime, displayseason, displayepisode)
     }
@@ -90,29 +88,27 @@ impl Episode {
                     collection_id,
                     directory,
                     dateadded,
-                    thumb,
-                    fanart,
+                    thumbs,
                     nfofile,
                     type,
                     title,
                     plot,
                     tagline,
-                    rating,
+                    ratings,
                     uniqueids,
                     actors,
                     credits,
                     directors
-                ) VALUES(?, ?, ?, "episode", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES(?, ?, ?, "episode", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.collection_id,
             self.directory,
             self.dateadded,
-            self.thumb,
-            self.fanart,
+            self.thumbs,
             self.nfofile,
             self.nfo_base.title,
             self.nfo_base.plot,
             self.nfo_base.tagline,
-            self.nfo_base.rating,
+            self.nfo_base.ratings,
             self.nfo_base.uniqueids,
             self.nfo_base.actors,
             self.nfo_base.credits,
@@ -154,13 +150,12 @@ impl Episode {
                     collection_id = ?,
                     directory = ?,
                     dateadded = ?,
-                    thumb = ?,
-                    fanart = ?,
+                    thumbs = ?,
                     nfofile = ?,
                     title = ?,
                     plot = ?,
                     tagline = ?,
-                    rating = ?,
+                    ratings = ?,
                     uniqueids = ?,
                     actors = ?,
                     credits = ?,
@@ -169,13 +164,12 @@ impl Episode {
             self.collection_id,
             self.directory,
             self.dateadded,
-            self.thumb,
-            self.fanart,
+            self.thumbs,
             self.nfofile,
             self.nfo_base.title,
             self.nfo_base.plot,
             self.nfo_base.tagline,
-            self.nfo_base.rating,
+            self.nfo_base.ratings,
             self.nfo_base.uniqueids,
             self.nfo_base.actors,
             self.nfo_base.credits,

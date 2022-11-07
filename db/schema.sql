@@ -25,11 +25,10 @@ CREATE TABLE mediaitems (
   plot TEXT,
   tagline TEXT,
   dateadded TEXT,
-  -- rating MIGHT move to the ratings table
-  rating JSON NOT NULL DEFAULT "[]",
+  -- ratings MIGHT move to the ratings table
+  ratings JSON NOT NULL DEFAULT "[]",
   -- thumb and fanart will move to the `images` table which will backref
-  thumb JSON NOT NULL DEFAULT "[]",
-  fanart JSON NOT NULL DEFAULT "[]",
+  thumbs JSON NOT NULL DEFAULT "[]",
   -- uniqueids will move to the `uniqueids` table which will backref
   uniqueids JSON NOT NULL DEFAULT "{}",
   -- this might all move to a `credits` table
@@ -45,9 +44,9 @@ CREATE TABLE movies(
   -- common to movies and tvshows
   originaltitle TEXT,
   sorttitle TEXT,
-  country JSON NOT NULL DEFAULT "[]",
-  genre JSON NOT NULL DEFAULT "[]",
-  studio JSON NOT NULL DEFAULT "[]",
+  countries JSON NOT NULL DEFAULT "[]",
+  genres JSON NOT NULL DEFAULT "[]",
+  studios JSON NOT NULL DEFAULT "[]",
   premiered TEXT,
   mpaa TEXT,
 
@@ -65,9 +64,9 @@ CREATE TABLE tvshows(
   -- common to movies and tvshows
   originaltitle TEXT,
   sorttitle TEXT,
-  country JSON NOT NULL DEFAULT "[]",
-  genre JSON NOT NULL DEFAULT "[]",
-  studio JSON NOT NULL DEFAULT "[]",
+  countries JSON NOT NULL DEFAULT "[]",
+  genres JSON NOT NULL DEFAULT "[]",
+  studios JSON NOT NULL DEFAULT "[]",
   premiered TEXT,
   mpaa TEXT,
 
@@ -92,7 +91,7 @@ CREATE TABLE episodes(
   episode INTEGER NOT NULL,
   displayseason INTEGER,
   displayepisode INTEGER,
-
+  thumbs JSON NOT NULL DEFAULT "[]",
   FOREIGN KEY(tvshow_id) REFERENCES mediaitems(id)
 );
 
@@ -104,7 +103,7 @@ CREATE TABLE images(
   image_id INTEGER NOT NULL,
 
   -- art type (poster, thumb, fanart).
-  arttype TEXT NOT NULL,
+  aspect TEXT NOT NULL,
 
   -- dimensions
   width NOT NULL,

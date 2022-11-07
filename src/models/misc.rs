@@ -12,14 +12,48 @@ pub struct FileInfo {
     pub size:   u64,
 }
 
+use std::io;
+use tokio::fs::File;
 impl FileInfo {
-    pub fn from_path(path: &str) -> std::io::Result<FileInfo> {
-        let m = std::fs::metadata(path)?;
+    pub fn join(mut basedir: &str, mut subdir: &str, path: &str) -> String {
+        let mut slash1 = "/";
+        let mut slash2 = "/";
+        if basedir == "" || basedir == "." || basedir == "./" {
+            basedir = "";
+            slash1 = "";
+        }
+        if subdir == "" || subdir == "." || subdir == "./" {
+            subdir = "";
+            slash2 = "";
+        }
+        [ basedir, slash1, subdir, slash2, path ].join("")
+    }
+
+    pub async fn from_path<'a, T>(basedir: &str, subdir: T, path: &str) -> io::Result<FileInfo>
+    where
+        T: Into<Option<&'a str>>
+    {
+        let subdir = subdir.into().unwrap_or("");
+        let m = tokio::fs::metadata(FileInfo::join(basedir, subdir, path)).await?;
         Ok(FileInfo {
-            path: path.to_string(),
+            path: FileInfo::join("", subdir, path),
             inode: m.ino(),
             size: m.len(),
         })
+    }
+
+    pub async fn open<'a, T>(basedir: &str, subdir: T, path: &str) -> io::Result<(File, FileInfo)>
+    where
+        T: Into<Option<&'a str>>
+    {
+        let subdir = subdir.into().unwrap_or("");
+        let f = File::open(FileInfo::join(basedir, subdir, path)).await?;
+        let m = f.metadata().await?;
+        Ok((f, FileInfo {
+            path: FileInfo::join("", subdir, path),
+            inode: m.ino(),
+            size: m.len(),
+        }))
     }
 }
 
@@ -46,12 +80,7 @@ pub struct Thumb {
     pub path:     String,
     pub aspect:   String,
     #[serde(skip_serializing_if = "is_default")]
-    pub preview:  Option<String>,
-}
-
-#[derive(Deserialize, Serialize, Default, Debug, PartialEq)]
-#[serde(default)]
-pub struct Fanart {
+    pub season:  Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
