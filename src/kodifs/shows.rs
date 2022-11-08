@@ -334,7 +334,6 @@ impl Show {
 
         let fileinfo = FileInfo::from_path(&coll.directory, "", dir).await.ok()?;
         let tvshow = TVShow {
-            collection_id: coll.collection_id as i64,
             directory: sqlx::types::Json(fileinfo),
             ..TVShow::default()
         };
@@ -371,7 +370,7 @@ impl Show {
             item.lastvideo = ls.episodes[ls.episodes.len() - 1].video_ts;
         }*/
 
-        println!("{:#?}", item);
+        // println!("{:#?}", item);
 
         // If we have an NFO and at least one image, accept it.
         let mut ok = false;

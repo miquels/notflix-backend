@@ -92,6 +92,8 @@ CREATE TABLE episodes(
   displayseason INTEGER,
   displayepisode INTEGER,
   thumbs JSON NOT NULL DEFAULT "[]",
+
+  FOREIGN KEY(id) REFERENCES mediaitems(id),
   FOREIGN KEY(tvshow_id) REFERENCES mediaitems(id)
 );
 

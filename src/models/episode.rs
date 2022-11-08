@@ -1,6 +1,8 @@
 use anyhow::Result;
 use serde::Serialize;
-use crate::db::DbHandle;
+use futures_util::TryStreamExt;
+
+use crate::db::Db;
 use super::nfo::build_struct;
 use super::misc::{Rating, Thumb, UniqueId, Actor};
 use super::{J, JV, FileInfo, NfoBase, is_default};
@@ -10,7 +12,9 @@ use super::{J, JV, FileInfo, NfoBase, is_default};
 pub struct Episode {
     // Common.
     pub id: i64,
+    #[serde(skip_serializing)]
     pub collection_id: i64,
+    pub tvshow_id: i64,
     #[serde(skip_serializing)]
     pub directory: sqlx::types::Json<FileInfo>,
     #[serde(skip_serializing_if = "is_default")]
@@ -44,8 +48,13 @@ pub struct Episode {
 }
 
 impl Episode {
-    pub async fn select_one(dbh: &DbHandle, id: i64) -> Option<Episode> {
-        let r = sqlx::query!(
+    pub async fn select_one(db: &Db, episode_id: i64) -> Option<Episode> {
+        let mut v = Episode::select(db, None, None, Some(episode_id)).await?;
+        v.pop()
+    }
+
+    pub async fn select(db: &Db, tvshow_id: Option<i64>, season_id: Option<i64>, episode_id: Option<i64>) -> Option<Vec<Episode>> {
+        let mut rows = sqlx::query!(
             r#"
                 SELECT i.id AS "id: i64",
                        i.collection_id AS "collection_id: i64",
@@ -59,6 +68,7 @@ impl Episode {
                        i.actors AS "actors!: JV<Actor>",
                        i.credits AS "credits!: JV<String>",
                        i.directors AS "directors!: JV<String>",
+                       m.tvshow_id,
                        m.video AS "video!: J<FileInfo>",
                        m.season AS "season: u32",
                        m.episode AS "episode: u32",
@@ -68,20 +78,32 @@ impl Episode {
                        m.displayepisode AS "displayepisode: u32"
                 FROM mediaitems i
                 JOIN episodes m ON (m.mediaitem_id = i.id)
-                WHERE i.id = ? AND i.deleted = 0"#,
-                id
+                WHERE (m.tvshow_id = ? OR ? IS NULL)
+                  AND (m.season = ? OR ? IS NULL)
+                  AND (i.id = ? OR ? IS NULL)
+                  AND i.deleted = 0"#,
+                tvshow_id,
+                tvshow_id,
+                season_id,
+                season_id,
+                episode_id,
+                episode_id
         )
-        .fetch_one(dbh)
-        .await
-        .ok()?;
-        build_struct!(Episode, r,
-            id, collection_id, directory, dateadded, nfofile, thumbs,
-            nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.ratings,
-            nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
-            video, season, episode, aired, runtime, displayseason, displayepisode)
+        .fetch(&db.handle);
+
+        let mut episodes = Vec::new();
+        while let Some(row) = rows.try_next().await.ok().flatten() {
+            let ep = build_struct!(Episode, row,
+                id, collection_id, directory, dateadded, nfofile, thumbs,
+                nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.ratings,
+                nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
+                tvshow_id, video, season, episode, aired, runtime, displayseason, displayepisode)?;
+            episodes.push(ep);
+        }
+        Some(episodes)
     }
 
-    pub async fn insert(&mut self, dbh: &DbHandle) -> Result<()> {
+    pub async fn insert(&mut self, db: &Db) -> Result<()> {
         self.id = sqlx::query!(
             r#"
                 INSERT INTO mediaitems(
@@ -114,7 +136,7 @@ impl Episode {
             self.nfo_base.credits,
             self.nfo_base.directors
         )
-        .execute(dbh)
+        .execute(&db.handle)
         .await?
         .last_insert_rowid();
 
@@ -122,14 +144,16 @@ impl Episode {
             r#"
                 INSERT INTO episodes(
                     mediaitem_id,
+                    tvshow_id,
                     aired,
                     runtime,
                     season,
                     episode,
                     displayseason,
                     displayepisode
-                ) VALUES(?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.id,
+            self.tvshow_id,
             self.aired,
             self.runtime,
             self.season,
@@ -137,13 +161,13 @@ impl Episode {
             self.displayseason,
             self.displayepisode,
         )
-        .execute(dbh)
+        .execute(&db.handle)
         .await?;
 
         Ok(())
     }
 
-    pub async fn update(&mut self, dbh: &DbHandle) -> Result<()> {
+    pub async fn update(&mut self, db: &Db) -> Result<()> {
         sqlx::query!(
             r#"
                 UPDATE mediaitems SET
@@ -176,12 +200,14 @@ impl Episode {
             self.nfo_base.directors,
             self.id
         )
-        .execute(dbh)
+        .execute(&db.handle)
         .await?;
 
         sqlx::query!(
             r#"
                 UPDATE episodes SET
+                    tvshow_id = ?,
+                    video = ?,
                     aired = ?,
                     runtime = ?,
                     season = ?,
@@ -189,6 +215,8 @@ impl Episode {
                     displayseason = ?,
                     displayepisode = ?
                 WHERE mediaitem_id = ?"#,
+            self.tvshow_id,
+            self.video,
             self.aired,
             self.runtime,
             self.season,
@@ -197,7 +225,7 @@ impl Episode {
             self.displayepisode,
             self.id
         )
-        .execute(dbh)
+        .execute(&db.handle)
         .await?;
 
         Ok(())
