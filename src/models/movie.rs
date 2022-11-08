@@ -1,8 +1,8 @@
 use anyhow::Result;
 use serde::Serialize;
-use crate::db::DbHandle;
+use crate::db::{Db, FindItemBy};
 use super::nfo::build_struct;
-use super::misc::{FindItemBy, Rating, Thumb, UniqueId, Actor};
+use super::misc::{Rating, Thumb, UniqueId, Actor};
 use super::{NfoBase, NfoMovie, FileInfo, J, JV, is_default};
 
 #[derive(Serialize, Default, Debug, sqlx::FromRow)]
@@ -40,10 +40,10 @@ pub struct Movie {
 }
 
 impl Movie {
-    pub async fn lookup(dbh: &DbHandle, find: FindItemBy<'_>) -> Option<Movie> {
+    pub async fn lookup(db: &Db, find: &FindItemBy<'_>) -> Option<Movie> {
         let id = match find.is_only_id() {
             Some(id) => id,
-            None => find.lookup(dbh).await?,
+            None => db.lookup(&find).await?,
         };
         let r = sqlx::query!(
             r#"
@@ -73,7 +73,7 @@ impl Movie {
                 WHERE i.id = ? AND i.deleted = 0"#,
             id,
         )
-        .fetch_one(dbh)
+        .fetch_one(&db.handle)
         .await
         .ok()?;
         build_struct!(Movie, r,
@@ -85,7 +85,7 @@ impl Movie {
             runtime, video)
     }
 
-    pub async fn insert(&mut self, dbh: &DbHandle) -> Result<()> {
+    pub async fn insert(&mut self, db: &Db) -> Result<()> {
         self.id = sqlx::query!(
             r#"
                 INSERT INTO mediaitems(
@@ -118,7 +118,7 @@ impl Movie {
             self.nfo_base.credits,
             self.nfo_base.directors
         )
-        .execute(dbh)
+        .execute(&db.handle)
         .await?
         .last_insert_rowid();
 
@@ -147,13 +147,13 @@ impl Movie {
             self.runtime,
             self.video,
         )
-        .execute(dbh)
+        .execute(&db.handle)
         .await?;
 
         Ok(())
     }
 
-    pub async fn update(&mut self, dbh: &DbHandle) -> Result<()> {
+    pub async fn update(&mut self, db: &Db) -> Result<()> {
         sqlx::query!(
             r#"
                 UPDATE mediaitems SET
@@ -186,7 +186,7 @@ impl Movie {
             self.nfo_base.directors,
             self.id
         )
-        .execute(dbh)
+        .execute(&db.handle)
         .await?;
 
         sqlx::query!(
@@ -213,7 +213,7 @@ impl Movie {
             self.video,
             self.id
         )
-        .execute(dbh)
+        .execute(&db.handle)
         .await?;
 
         Ok(())
