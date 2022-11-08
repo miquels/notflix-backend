@@ -6,9 +6,11 @@ use url::Url;
 
 mod movies;
 mod nfo;
+mod scandirs;
 mod shows;
 
 pub use movies::{build_movie, build_movies};
+pub use scandirs::list_directories;
 pub use shows::{build_show, build_shows};
 pub use nfo::Nfo;
 

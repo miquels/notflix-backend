@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::os::unix::fs::MetadataExt;
 
@@ -51,31 +50,6 @@ pub async fn update_movies(db: &DataBase, coll: &Collection, pace: u32) {
     }
 }
 */
-
-// Get a list of all directories and their last-modified time (in unix ms)
-pub async fn list_movies(coll: &Collection, name: &str) -> HashMap<String, i64> {
-    let mut hm = HashMap::new();
-
-    let mut dirname = PathBuf::from(&coll.directory);
-    dirname.push(name);
-
-    let mut d = match fs::read_dir(&dirname).await {
-        Ok(d) => d,
-        Err(_) => return hm,
-    };
-
-    while let Ok(Some(entry)) = d.next_entry().await {
-        let file_name = entry.file_name();
-        let name = match file_name.to_str() {
-            Some(name) if !name.starts_with(".") && !name.starts_with("+ ") => name,
-            _ => continue,
-        };
-        if let Ok(modified) = entry.metadata().await.and_then(|m| m.modified()) {
-            hm.insert(name.to_string(), super::systemtime_to_ms(modified) as i64);
-        }
-    }
-    hm
-}
 
 pub async fn build_movie(coll: &Collection, name: &str, parse_nfo: bool) -> Option<Movie> {
 
