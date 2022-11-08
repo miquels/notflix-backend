@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::time::Duration;
+// use std::time::Duration;
 
 use tokio::fs;
 
@@ -13,7 +13,7 @@ struct EpMap {
     episode_idx: usize,
 }
 
-pub async fn build_shows(coll: &Collection, pace: u32) {
+pub async fn build_shows(_coll: &Collection, _pace: u32) {
     todo!()
 }
 
@@ -273,7 +273,7 @@ impl Show {
                     None => None,
                 };
             }
-            let (season_idx, episode_idx, mut aux, ext) = match b {
+            let (season_idx, episode_idx, aux, ext) = match b {
                 Some(b) => b,
                 None => continue,
             };
@@ -362,13 +362,14 @@ impl Show {
         item.seasons.sort_by_key(|s| s.season);
 
         // Timestamp of first and last video.
+        /*
         if item.seasons.len() > 0 {
+            // XXX FIXME firstvideo lastvideo
             let fs = &item.seasons[0];
             let ls = &item.seasons[item.seasons.len() - 1];
-            // XXX FIXME firstvideo lastvideo
-            // item.firstvideo = fs.episodes[0].video_ts;
-            // item.lastvideo = ls.episodes[ls.episodes.len() - 1].video_ts;
-        }
+            item.firstvideo = fs.episodes[0].video_ts;
+            item.lastvideo = ls.episodes[ls.episodes.len() - 1].video_ts;
+        }*/
 
         println!("{:#?}", item);
 

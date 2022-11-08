@@ -69,7 +69,7 @@ impl Collection {
     }
 
     /// Get item details.
-    pub async fn get_item(&self, name: &str) -> Option<Arc<Item>> {
+    pub async fn get_item(&self, _name: &str) -> Option<Arc<Item>> {
         todo!();
     }
     /*

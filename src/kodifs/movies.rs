@@ -8,7 +8,7 @@ use crate::collections::*;
 use crate::models::{FileInfo, Movie, Thumb};
 use super::*;
 
-pub async fn build_movies(coll: &Collection, pace: u32) {
+pub async fn build_movies(_coll: &Collection, _pace: u32) {
     todo!()
 }
 
