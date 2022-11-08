@@ -21,7 +21,6 @@ macro_rules! def_regex {
 
 def_regex!(IS_VIDEO => r#"^(.*)\.(divx|mov|mp4|MP4|m4u|m4v)$"#);
 def_regex!(IS_IMAGE => r#"^(.+)\.(jpg|jpeg|png|tbn)$"#);
-def_regex!(IS_IMAGE_EXT => r#"^(jpg|jpeg|png|tbn)$"#);
 def_regex!(IS_SEASON_IMG => r#"^season([0-9]+)-?([a-z]+|)\.(jpg|jpeg|png|tbn)$"#);
 def_regex!(IS_SHOW_SUBDIR => r#"^S([0-9]+)|Specials([0-9]*)$"#);
 def_regex!(IS_EXT1 => r#"^(.*)()\.(png|jpg|jpeg|tbn|nfo|srt)$"#);

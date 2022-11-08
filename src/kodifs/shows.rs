@@ -7,12 +7,6 @@ use crate::collections::Collection;
 use crate::models::{TVShow, Season, Thumb, Episode, FileInfo};
 use super::*;
 
-#[derive(Debug)]
-struct EpMap {
-    season_idx: usize,
-    episode_idx: usize,
-}
-
 pub async fn build_shows(_coll: &Collection, _pace: u32) {
     todo!()
 }
@@ -55,8 +49,17 @@ pub async fn build_show(coll: &Collection, name: &str) -> Option<TVShow> {
     Show::build_show(coll, name).await
 }
 
-#[derive(serde::Serialize, Default, Debug)]
+#[derive(Debug)]
+struct EpMap {
+    season_idx: usize,
+    episode_idx: usize,
+}
+
+#[derive(Default, Debug)]
 pub struct Show {
+    ep_map:  HashMap<String, EpMap>,
+    basedir: String,
+    season_hint: Option<u32>,
     tvshow:  TVShow,
     seasons: Vec<Season>,
 }
@@ -88,15 +91,15 @@ impl Show {
     }
 
     // This function scans a directory for tv show information.
-    // It can be the base directory, in which case 'season_hint' is None,
+    // It can be the base directory, in which case 'self.season_hint' is None,
     // or it can be a season subdirectory (like S01/) and then season_hint is Some(1).
     #[async_recursion::async_recursion]
-    async fn show_scan_dir(&mut self, basedir: &str, subdir: Option<&'async_recursion str>, ep_map: &mut HashMap<String, EpMap>, season_hint: Option<u32>) {
+    async fn show_scan_dir(&mut self, subdir: Option<&'async_recursion str>) {
 
         // Read the entire directory in one go.
         let dir = match subdir {
-            Some(subdir) => format!("{}/{}", basedir, subdir),
-            None => basedir.to_string(),
+            Some(subdir) => format!("{}/{}", &self.basedir, subdir),
+            None => self.basedir.clone(),
         };
         let mut d = match fs::read_dir(&dir).await {
             Ok(d) => d,
@@ -108,6 +111,7 @@ impl Show {
         }
         entries.sort_by_key(|e| e.file_name());
 
+        // Process each file.
         for entry in &entries {
 
             // Get filename of this entry. Skip non-utf8 and dotfiles.
@@ -121,18 +125,19 @@ impl Show {
             }
 
             // first things that can only be found in the shows basedir, not in subdirs.
-            if season_hint.is_none() {
+            if self.season_hint.is_none() {
 
                 // S* subdir.
                 if let Some(s) = IS_SHOW_SUBDIR.captures(name) {
-                    let sn = s[1].parse::<u32>().unwrap();
-                    self.show_scan_dir(basedir, Some(name), ep_map, Some(sn)).await;
+                    self.season_hint = s[1].parse::<u32>().ok();
+                    self.show_scan_dir(Some(name)).await;
+                    self.season_hint = None;
                     continue;
                 }
 
                 // nfo file.
                 if name == "tvshow.nfo" {
-                    match FileInfo::open(basedir, subdir, name).await {
+                    match FileInfo::open(&self.basedir, subdir, name).await {
                         Ok((mut file, nfofile)) => {
                             if let Ok(nfo) = Nfo::read(&mut file).await {
                                 let mut nfo_base = nfo.to_nfo_base();
@@ -147,184 +152,200 @@ impl Show {
                     }
                     continue;
                 }
-
-                // other images.
-                if let Some(s) = IS_IMAGE.captures(name) {
-                    let base = &s[1];
-                    let (season, aspect) = match base {
-                        "season-all-banner" => (Some("all"), "banner"),
-                        "season-all-poster" => (Some("all"), "poster"),
-                        "season-specials-banner" => (Some("specials"), "banner"),
-                        "season-specials-poster" => (Some("specials"), "poster"),
-                        "banner" | "fanart" | "folder" | "poster" => (None, base),
-                        _ => (None, ""),
-                    };
-                    if aspect != "" {
-                        add_thumb(&mut self.tvshow.thumbs, "", subdir, name, aspect, season);
-                        continue;
-                    }
-                }
             }
 
-            // now things that can only be found in a subdir because they need context.
-            // For example "poster.jpg" is a generic poster in the main directory,
-            // and a season poster in the S01/ subdirectory.
-            if let Some(season) = season_hint {
-                if let Some(s) = IS_IMAGE.captures(name) {
-                    let a = &s[1];
-                    if a == "banner" || a == "fanart" || a == "folder" || a == "poster" {
-                        let season = format!("{}", season);
-                        let season = Some(season.as_str());
-                        add_thumb(&mut self.tvshow.thumbs, "", subdir, name, a, season);
-                        continue;
-                    }
-                }
-            }
-
-            // season image (season01-poster.jpg, etc) can be in main dir or subdir.
-            if let Some(s) = IS_SEASON_IMG.captures(name) {
-                let aspect = match &s[2] {
-                    "banner" | "poster" => &s[2],
-                    _ => "poster",
-                };
-                add_thumb(&mut self.tvshow.thumbs, "", subdir, name, aspect, Some(&s[1]));
+            // Handle images.
+            if self.tvshow_image_file(name, subdir).await {
                 continue;
             }
 
             // episodes can be in main dir or subdir.
-            let s = match IS_VIDEO.captures(name) {
-                Some(s) => s,
-                None => continue,
-            };
-
-            // Parse the episode filename for season and episode number etc.
-            let ep_info = match EpisodeNameInfo::parse(&s[1], season_hint) {
-                Some(ep_info) => ep_info,
-                None => continue,
-            };
-
-            let video = match FileInfo::from_path(basedir, subdir, name).await {
-                Ok(v) => sqlx::types::Json(v),
-                Err(_) => continue,
-            };
-            let mut ep = Episode {
-                video,
-                ..Episode::default()
-            };
-
-            // Is it a duplicate entry? (mp4s for same season/episode in different dirs)
-            if let Some(epm) = ep_map.get(&s[1]) {
-
-                // If it already has related files, dont overwrite.
-                let ep = self.get_episode(epm.season_idx, epm.episode_idx);
-                if ep.nfofile.is_some() || ep.thumbs.0.len() > 0 {
-                    continue;
-                }
-
-                // Or, if we are in the wrong dir, ignore.
-                if Some(ep_info.season) != season_hint {
-                    continue;
-                }
-
-                // OK, replace.
-                self.seasons[epm.season_idx].episodes.remove(epm.episode_idx);
-                ep_map.remove(&s[1]);
-            }
-
-            // Add info from the filename.
-            ep.nfo_base.title = Some(ep_info.name);
-            ep.season = ep_info.season;
-            ep.episode = ep_info.episode;
-            // XXX TODO ep.double = ep_info.double;
-
-            // Add this episode to the season.
-            let season_idx = self.get_season(ep.season as u32);
-            self.seasons[season_idx].episodes.push(ep);
-
-            // And remember basename -> season_idx, episode_idx mapping.
-            let episode_idx = self.seasons[season_idx].episodes.len() - 1;
-            ep_map.insert(s[1].to_string(), EpMap { season_idx, episode_idx });
+            self.episode_video_file(name, subdir).await;
         }
 
         // Now scan the directory again for episode-related files.
         for entry in &entries {
-            let file_name = entry.file_name();
-            let name = match file_name.to_str() {
-                Some(name) => name,
-                None => continue,
-            };
+            if let Some(name) = entry.file_name().to_str() {
+                self.add_related_file(name, subdir).await;
+            }
+        }
+    }
 
-            // First try the (basename).(jpg|tbn|...) variant.
-            let mut b = match IS_EXT1.captures(name) {
-                Some(s) => {
-                    let ep = ep_map.get(&s[1]);
-                    ep.map(|ep| (ep.season_idx, ep.episode_idx, s[2].to_string(), s[3].to_string()))
-                },
-                None => None,
-            };
-            // Then try the (basename).(-poster).(jpg|tbn|...) variant.
-            if b.is_none() {
-                b = match IS_EXT2.captures(name) {
-                    Some(s) => {
-                        let ep = ep_map.get(&s[1]);
-                        ep.map(|ep| (ep.season_idx, ep.episode_idx, s[2].to_string(), s[3].to_string()))
-                    },
-                    None => None,
+    async fn tvshow_image_file(&mut self, name: &str, subdir: Option<&str>) -> bool {
+        // Images that can only be found in the base directory.
+        if self.season_hint.is_none() {
+            if let Some(s) = IS_IMAGE.captures(name) {
+                let base = &s[1];
+                let (season, aspect) = match base {
+                    "season-all-banner" => (Some("all"), "banner"),
+                    "season-all-poster" => (Some("all"), "poster"),
+                    "season-specials-banner" => (Some("specials"), "banner"),
+                    "season-specials-poster" => (Some("specials"), "poster"),
+                    "banner" | "fanart" | "folder" | "poster" => (None, base),
+                    _ => (None, ""),
                 };
+                if aspect != "" {
+                    add_thumb(&mut self.tvshow.thumbs, "", subdir, name, aspect, season);
+                    return true;
+                }
             }
-            let (season_idx, episode_idx, aux, ext) = match b {
-                Some(b) => b,
-                None => continue,
+        }
+
+        // Things that can only be found in a subdir because they need context.
+        // For example "poster.jpg" is a generic poster in the main directory,
+        // and a season poster in the S01/ subdirectory.
+        if let Some(season) = self.season_hint {
+            if let Some(s) = IS_IMAGE.captures(name) {
+                let a = &s[1];
+                if a == "banner" || a == "fanart" || a == "folder" || a == "poster" {
+                    let season = format!("{}", season);
+                    let season = Some(season.as_str());
+                    add_thumb(&mut self.tvshow.thumbs, "", subdir, name, a, season);
+                    return true;
+                }
+            }
+        }
+
+        // season image (season01-poster.jpg, etc) can be in main dir or subdir.
+        if let Some(s) = IS_SEASON_IMG.captures(name) {
+            let aspect = match &s[2] {
+                "banner" | "poster" => &s[2],
+                _ => "poster",
             };
-            let ep = self.get_episode_mut(season_idx, episode_idx);
+            add_thumb(&mut self.tvshow.thumbs, "", subdir, name, aspect, Some(&s[1]));
+            return true;
+        }
 
-            // thumb: <base>.tbn or <base>-thumb.ext
-            if IS_IMAGE.is_match(&name) {
-                if ext == "tbn" || aux == "thumb" {
-                    add_thumb(& mut ep.thumbs, "", subdir, name, "thumb", None);
-                }
-                continue;
+        false
+    }
+
+    async fn episode_video_file(&mut self, name: &str, subdir: Option<&str>) {
+
+        let s = match IS_VIDEO.captures(name) {
+            Some(s) => s,
+            None => return,
+        };
+
+        // Parse the episode filename for season and episode number etc.
+        let ep_info = match EpisodeNameInfo::parse(&s[1], self.season_hint) {
+            Some(ep_info) => ep_info,
+            None => return,
+        };
+
+        let video = match FileInfo::from_path(&self.basedir, subdir, name).await {
+            Ok(v) => sqlx::types::Json(v),
+            Err(_) => return,
+        };
+        let mut ep = Episode {
+            video,
+            ..Episode::default()
+        };
+
+        // Is it a duplicate entry? (mp4s for same season/episode in different dirs)
+        if let Some(epm) = self.ep_map.get(&s[1]) {
+
+            // If it already has related files, dont overwrite.
+            let ep = self.get_episode(epm.season_idx, epm.episode_idx);
+            if ep.nfofile.is_some() || ep.thumbs.0.len() > 0 {
+                return;
             }
 
-            /* // XXX FIXME subtitles.
-            if ext == "srt" {
-                if aux == "" || aux == "und" {
-                    aux = "zz".to_string();
-                }
-                ep.srt_subs.push(Subs{
-                    lang: aux,
-                    path: p,
-                });
-                continue;
+            // Or, if we are in the wrong dir, ignore.
+            if Some(ep_info.season) != self.season_hint {
+                return;
             }
 
-            if ext == "vtt" {
-                if aux == "" || aux == "und" {
-                    aux = "zz".to_string();
-                }
-                ep.vtt_subs.push(Subs{
-                    lang: aux,
-                    path: p,
-                });
-                continue;
-            }
-            */
+            // OK, replace.
+            self.seasons[epm.season_idx].episodes.remove(epm.episode_idx);
+            self.ep_map.remove(&s[1]);
+        }
 
-            if ext == "nfo" {
-                match FileInfo::open(basedir, subdir, name).await {
-                    Ok((mut file, nfofile)) => {
-                        if let Ok(nfo) = Nfo::read(&mut file).await {
-                            let mut nfo_base = nfo.to_nfo_base();
-                            if nfo_base.title.is_none() {
-                                std::mem::swap(&mut ep.nfo_base.title, &mut nfo_base.title);
-                            }
-                            ep.nfo_base = nfo_base;
+        // Add info from the filename.
+        ep.nfo_base.title = Some(ep_info.name);
+        ep.season = ep_info.season;
+        ep.episode = ep_info.episode;
+        // XXX TODO ep.double = ep_info.double;
+
+        // Add this episode to the season.
+        let season_idx = self.get_season(ep.season as u32);
+        self.seasons[season_idx].episodes.push(ep);
+
+        // And remember basename -> season_idx, episode_idx mapping.
+        let episode_idx = self.seasons[season_idx].episodes.len() - 1;
+        self.ep_map.insert(s[1].to_string(), EpMap { season_idx, episode_idx });
+    }
+
+    async fn add_related_file(&mut self, name: &str, subdir: Option<&str>) {
+
+        // Split the filename into basename, aux, and extension.
+        // tvshow.s01e01(-poster).jpg
+        // -- base------ --aux--- --ext--
+        //
+        // First try matching without the -aux part.
+        let b = IS_EXT1.captures(name).and_then(|s| {
+            let ep = self.ep_map.get(&s[1]);
+            ep.map(|ep| (ep.season_idx, ep.episode_idx, String::new(), s[2].to_string()))
+        }).or_else(|| {
+            // Then try matching with the -aux part.
+            IS_EXT2.captures(name).and_then(|s| {
+                let ep = self.ep_map.get(&s[1]);
+                ep.map(|ep| (ep.season_idx, ep.episode_idx, s[2].to_string(), s[3].to_string()))
+            })
+        });
+
+        // Only continue if we did have a match.
+        let (season_idx, episode_idx, aux, ext) = match b {
+            Some(b) => b,
+            None => return,
+        };
+        let basedir = self.basedir.clone();
+        let ep = self.get_episode_mut(season_idx, episode_idx);
+
+        // Thumb: <base>.tbn or <base>-thumb.ext
+        if IS_IMAGE.is_match(&name) {
+            if ext == "tbn" || aux == "thumb" {
+                add_thumb(& mut ep.thumbs, "", subdir, name, "thumb", None);
+            }
+            return;
+        }
+
+        /* // XXX FIXME subtitles.
+        if ext == "srt" {
+            if aux == "" || aux == "und" {
+                aux = "zz".to_string();
+            }
+            ep.srt_subs.push(Subs{
+                lang: aux,
+                path: p,
+            });
+            return;
+        }
+
+        if ext == "vtt" {
+            if aux == "" || aux == "und" {
+                aux = "zz".to_string();
+            }
+            ep.vtt_subs.push(Subs{
+                lang: aux,
+                path: p,
+            });
+            return;
+        }
+        */
+
+        if ext == "nfo" {
+            match FileInfo::open(&basedir, subdir, name).await {
+                Ok((mut file, nfofile)) => {
+                    if let Ok(nfo) = Nfo::read(&mut file).await {
+                        let mut nfo_base = nfo.to_nfo_base();
+                        if nfo_base.title.is_none() {
+                            std::mem::swap(&mut ep.nfo_base.title, &mut nfo_base.title);
                         }
-                        ep.nfofile = Some(sqlx::types::Json(nfofile));
-                    },
-                    Err(_) => {},
-                }
-                continue;
+                        ep.nfo_base = nfo_base;
+                    }
+                    ep.nfofile = Some(sqlx::types::Json(nfofile));
+                },
+                Err(_) => {},
             }
         }
     }
@@ -337,13 +358,12 @@ impl Show {
             ..TVShow::default()
         };
         let mut item = Show {
+            basedir: join_paths(Some(&coll.directory), dir),
             tvshow,
             ..Show::default()
         };
 
-        let showdir = join_paths(Some(&coll.directory), dir);
-        let mut ep_map = HashMap::new();
-        item.show_scan_dir(&showdir, None, &mut ep_map, None).await;
+        item.show_scan_dir(None).await;
 
         for season_idx in 0 .. item.seasons.len() {
             // remove episodes without video
@@ -386,7 +406,7 @@ impl Show {
             return None;
         }
 
-        let Show { mut tvshow, seasons } = item;
+        let Show { mut tvshow, seasons, .. } = item;
         tvshow.seasons = seasons;
         Some(tvshow)
     }
