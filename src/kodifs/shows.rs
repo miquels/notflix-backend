@@ -110,7 +110,7 @@ impl Show {
 
         for entry in &entries {
 
-            // Decode name.
+            // Get filename of this entry. Skip non-utf8 and dotfiles.
             let file_name = entry.file_name();
             let name = match file_name.to_str() {
                 Some(name) => name,
@@ -120,8 +120,7 @@ impl Show {
                 continue;
             }
 
-            // first things that can only be found in the
-            // shows basedir, not in subdirs.
+            // first things that can only be found in the shows basedir, not in subdirs.
             if season_hint.is_none() {
 
                 // S* subdir.
@@ -213,7 +212,7 @@ impl Show {
                 ..Episode::default()
             };
 
-            // Is it a double entry? (dup mp4s in different dirs)
+            // Is it a duplicate entry? (mp4s for same season/episode in different dirs)
             if let Some(epm) = ep_map.get(&s[1]) {
 
                 // If it already has related files, dont overwrite.
@@ -320,8 +319,8 @@ impl Show {
                                 std::mem::swap(&mut ep.nfo_base.title, &mut nfo_base.title);
                             }
                             ep.nfo_base = nfo_base;
-                            ep.nfofile = Some(sqlx::types::Json(nfofile));
                         }
+                        ep.nfofile = Some(sqlx::types::Json(nfofile));
                     },
                     Err(_) => {},
                 }
