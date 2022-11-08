@@ -17,6 +17,8 @@ pub struct Episode {
     pub tvshow_id: i64,
     #[serde(skip_serializing)]
     pub directory: sqlx::types::Json<FileInfo>,
+    #[serde(skip)]
+    pub lastmodified: i64,
     #[serde(skip_serializing_if = "is_default")]
     pub dateadded: Option<String>,
     #[serde(skip_serializing)]
@@ -59,6 +61,7 @@ impl Episode {
                 SELECT i.id AS "id: i64",
                        i.collection_id AS "collection_id: i64",
                        i.directory AS "directory!: J<FileInfo>",
+                       i.lastmodified,
                        i.dateadded,
                        i.nfofile AS "nfofile?: J<FileInfo>",
                        i.thumbs AS "thumbs!: JV<Thumb>",
@@ -94,7 +97,7 @@ impl Episode {
         let mut episodes = Vec::new();
         while let Some(row) = rows.try_next().await.ok().flatten() {
             let ep = build_struct!(Episode, row,
-                id, collection_id, directory, dateadded, nfofile, thumbs,
+                id, collection_id, directory, lastmodified, dateadded, nfofile, thumbs,
                 nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.ratings,
                 nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
                 tvshow_id, video, season, episode, aired, runtime, displayseason, displayepisode)?;
@@ -109,6 +112,7 @@ impl Episode {
                 INSERT INTO mediaitems(
                     collection_id,
                     directory,
+                    lastmodified,
                     dateadded,
                     thumbs,
                     nfofile,
@@ -121,9 +125,10 @@ impl Episode {
                     actors,
                     credits,
                     directors
-                ) VALUES(?, ?, ?, "episode", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES(?, ?, ?, ?, "episode", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.collection_id,
             self.directory,
+            self.lastmodified,
             self.dateadded,
             self.thumbs,
             self.nfofile,
@@ -173,6 +178,7 @@ impl Episode {
                 UPDATE mediaitems SET
                     collection_id = ?,
                     directory = ?,
+                    lastmodified = ?,
                     dateadded = ?,
                     thumbs = ?,
                     nfofile = ?,
@@ -187,6 +193,7 @@ impl Episode {
                 WHERE id = ?"#,
             self.collection_id,
             self.directory,
+            self.lastmodified,
             self.dateadded,
             self.thumbs,
             self.nfofile,

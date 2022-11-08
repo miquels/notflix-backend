@@ -16,6 +16,8 @@ CREATE TABLE collections(
 CREATE TABLE mediaitems (
   id integer PRIMARY KEY AUTOINCREMENT,
   collection_id INTEGER NOT NULL,
+  -- unix timestamp of anything contained in this item.
+  lastmodified BIGINT NOT NULL,
   -- directory is a FileInfo, path + inode + size.
   directory JSON NOT NULL,
   deleted INTEGER DEFAULT 0 NOT NULL,

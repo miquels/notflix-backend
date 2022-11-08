@@ -13,6 +13,8 @@ pub struct TVShow {
     pub collection_id: i64,
     #[serde(skip_serializing)]
     pub directory: sqlx::types::Json<FileInfo>,
+    #[serde(skip)]
+    pub lastmodified: i64,
     #[serde(skip_serializing_if = "is_default")]
     pub dateadded: Option<String>,
     #[serde(skip_serializing)]
@@ -49,6 +51,7 @@ impl TVShow {
                 SELECT i.id AS "id: i64",
                        i.collection_id AS "collection_id: i64",
                        i.directory AS "directory!: J<FileInfo>",
+                       i.lastmodified,
                        i.dateadded,
                        i.nfofile AS "nfofile?: J<FileInfo>",
                        i.thumbs AS "thumbs!: JV<Thumb>",
@@ -77,7 +80,7 @@ impl TVShow {
         .await
         .ok()?;
         build_struct!(TVShow, r,
-            id, collection_id, directory, dateadded, nfofile, thumbs,
+            id, collection_id, directory, lastmodified, dateadded, nfofile, thumbs,
             nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.ratings,
             nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
             nfo_movie.originaltitle, nfo_movie.sorttitle, nfo_movie.countries,
@@ -89,12 +92,13 @@ impl TVShow {
         self.id = sqlx::query!(
             r#"
                 INSERT INTO mediaitems(
+                    type,
                     collection_id,
                     directory,
+                    lastmodified,
                     dateadded,
-                    thumbs,
                     nfofile,
-                    type,
+                    thumbs,
                     title,
                     plot,
                     tagline,
@@ -103,11 +107,12 @@ impl TVShow {
                     actors,
                     credits,
                     directors
-                ) VALUES(?, ?, ?, "tvshow", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES("tvshow", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.collection_id,
             self.directory,
-            self.nfofile,
+            self.lastmodified,
             self.dateadded,
+            self.nfofile,
             self.thumbs,
             self.nfo_base.title,
             self.nfo_base.plot,
@@ -161,6 +166,7 @@ impl TVShow {
                 UPDATE mediaitems SET
                     collection_id = ?,
                     directory = ?,
+                    lastmodified = ?,
                     dateadded = ?,
                     thumbs = ?,
                     nfofile = ?,
@@ -175,6 +181,7 @@ impl TVShow {
                 WHERE id = ?"#,
             self.collection_id,
             self.directory,
+            self.lastmodified,
             self.dateadded,
             self.thumbs,
             self.nfofile,
