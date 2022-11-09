@@ -128,12 +128,12 @@ CREATE TABLE uniqueids(
   mediaitem_id INTEGER NOT NULL,
 
   -- type is imdb, or tvdb, etc
-  type TEXT NOT NULL,
+  idtype TEXT NOT NULL,
 
   -- uniqueid is a imdb-id, or tvdb-id, etc.
   uniqueid TEXT NOT NULL,
 
-  -- default INTEGER DEFAULT 0 NOT NULL,
+  is_default INTEGER DEFAULT 0 NOT NULL,
 
   FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
 );

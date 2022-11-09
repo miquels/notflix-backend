@@ -4,6 +4,7 @@ mod episode;
 mod misc;
 mod nfo;
 mod fileinfo;
+mod uniqueids;
 
 pub use movie::Movie;
 pub use tvshow::{TVShow, Season};
