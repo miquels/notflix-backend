@@ -158,7 +158,7 @@ impl Movie {
         Ok(())
     }
 
-    pub async fn update(&mut self, db: &Db) -> Result<()> {
+    pub async fn update(&self, db: &Db) -> Result<()> {
         sqlx::query!(
             r#"
                 UPDATE mediaitems SET

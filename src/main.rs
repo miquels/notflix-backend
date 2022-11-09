@@ -29,6 +29,10 @@ pub enum Command {
     /// Scan directory.
     ScanDir(ScanDirOpts),
 
+    #[structopt(display_order = 2)]
+    /// Update movie or tvshow in database.
+    Update(UpdateOpts),
+
     #[structopt(display_order = 3)]
     /// Dump database
     DumpDb(DumpDbOpts),
@@ -68,6 +72,32 @@ pub struct ScanDirOpts {
 }
 
 #[derive(StructOpt, Debug)]
+pub struct UpdateOpts {
+    #[structopt(long)]
+    /// Update single movie.
+    pub movie: bool,
+
+    #[structopt(long)]
+    /// Update movie collection
+    pub movies: bool,
+
+    #[structopt(long)]
+    /// Update single tvshow
+    pub tvshow: bool,
+
+    #[structopt(long)]
+    /// Update tvshow directory
+    pub tvshows: bool,
+
+    #[structopt(long)]
+    /// Update tvshow directory
+    pub database: String,
+
+    /// Directory name.
+    pub directory:  String,
+}
+
+#[derive(StructOpt, Debug)]
 pub struct DumpDbOpts {
     /// Database name.
     pub database:  String,
@@ -85,6 +115,7 @@ async fn main() -> anyhow::Result<()> {
     match opts.cmd {
         Command::Serve(opts) => return serve(opts).await,
         Command::ScanDir(opts) => return scandir(opts).await,
+        Command::Update(opts) => return update(opts).await,
         Command::DumpDb(opts) => return dumpdb(opts).await,
         Command::ReadNfo(opts) => return readnfo(opts).await,
     }
@@ -108,6 +139,7 @@ async fn dumpdb(_opts: DumpDbOpts) -> anyhow::Result<()> {
     let items = db::get_items(&handle).await?;
     println!("{}", serde_json::to_string_pretty(&items)?);
     */
+    eprintln!("not implemented");
     Ok(())
 }
 
@@ -161,6 +193,36 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
                 _ => println!("{}", serde_json::to_string_pretty(&items)?),
             }
         }
+    }
+    Ok(())
+}
+
+async fn update(opts: UpdateOpts) -> anyhow::Result<()> {
+    let db = db::Db::connect(&opts.database).await?;
+
+    if opts.movie || opts.movies {
+        let mut coll = collections::Collection {
+            name: "Movies".to_string(),
+            type_: "movies".to_string(),
+            directory: opts.directory.clone(),
+            baseurl: "/".to_string(),
+            ..collections::Collection::default()
+        };
+        if opts.movie {
+            let mut m = opts.directory.rsplitn(2, '/');
+            let file_name = m.next().unwrap();
+            coll.directory = m.next().unwrap_or(".").to_string();
+            coll.collection_id = 1;
+
+            db.update_movie(&coll, file_name).await?;
+            println!("movie updated!");
+        }
+        if opts.movies {
+            eprintln!("not implemented");
+        }
+    }
+    if opts.tvshow || opts.tvshows {
+            eprintln!("not implemented");
     }
     Ok(())
 }

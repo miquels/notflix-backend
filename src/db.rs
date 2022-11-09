@@ -3,12 +3,13 @@
 /// This is where we put data scraped from the filesystem into
 /// the database.
 
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use futures_util::TryStreamExt;
 use sqlx::sqlite::SqlitePool;
 
 use crate::collections::Collection;
-use crate::models::{FileInfo, UniqueId};
+use crate::models::{FileInfo, Movie, UniqueId};
+use crate::kodifs;
 
 pub type DbHandle = SqlitePool;
 
@@ -27,8 +28,35 @@ impl Db {
         })
     }
 
-    pub async fn sync_movie(&self, _coll: &Collection, _name: &str) {
-        todo!()
+    // Update one movie.
+    pub async fn update_movie(&self, coll: &Collection, name: &str) -> Result<()> {
+
+        // First, get the movie from the database.
+        let mut by = FindItemBy::new();
+        by.directory = Some(name);
+        let oldmovie = match Movie::lookup(self, &by).await {
+            Some(mv) => mv,
+            None => Movie::default(),
+        };
+
+        // Now scan the movie directory.
+        let mut movie = match kodifs::update_movie(coll, name, &oldmovie).await {
+            Some(mv) => mv,
+            None => bail!("failed to scan directory {}", name),
+        };
+
+        // insert or update?
+        if oldmovie.id == 0 {
+            // No ID yet, so it doesn't exist in the database.
+            movie.insert(self).await
+                .with_context(|| format!("failed to insert db for {}", name))?;
+        } else if movie.lastmodified > oldmovie.lastmodified && oldmovie.lastmodified != 0 {
+            // There was an update, so update the database.
+            movie.update(self).await
+                .with_context(|| format!("failed to update db for {}", name))?;
+        }
+
+        Ok(())
     }
 
     // TODO: if multiple matches, return the one we trust most (a match on 'id'
