@@ -10,7 +10,7 @@ mod scandirs;
 mod shows;
 
 pub use movies::{build_movie, build_movies};
-pub use scandirs::list_directories;
+pub use scandirs::{scan_directory, scan_directories};
 pub use shows::{build_show, build_shows};
 pub use nfo::Nfo;
 
@@ -47,9 +47,3 @@ pub fn join_and_escape_path(subdir: Option<&str>, name: &str) -> String {
         None => escape_path(name),
     }
 }
-
-/// Common function.
-pub fn systemtime_to_ms(tm: SystemTime) -> u64 {
-    tm.duration_since(SystemTime::UNIX_EPOCH).map(|t| t.as_millis()).unwrap_or(0) as u64
-}
-

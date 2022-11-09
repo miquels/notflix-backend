@@ -7,6 +7,7 @@ use anyhow::Result;
 use futures_util::TryStreamExt;
 use sqlx::sqlite::SqlitePool;
 
+use crate::collections::Collection;
 use crate::models::{FileInfo, UniqueId};
 
 pub type DbHandle = SqlitePool;
@@ -24,6 +25,10 @@ impl Db {
         Ok(Db {
             handle: SqlitePool::connect(db).await?,
         })
+    }
+
+    pub async fn sync_movie(&self, coll: &Collection, name: &str) {
+        todo!()
     }
 
     // TODO: if multiple matches, return the one we trust most (a match on 'id'
@@ -88,6 +93,7 @@ impl Db {
     }
 }
 
+// helper.
 fn has_uid(uids: &Vec<UniqueId>, idtype: &str, id: &str) -> bool {
     for uid in uids {
         let uid_idtype = uid.idtype.as_ref().map(|s| s.as_str()).unwrap_or("");

@@ -5,66 +5,27 @@ use tokio::fs;
 
 use crate::collections::*;
 use crate::models::{FileInfo, Movie, Thumb};
+use crate::util::SystemTimeToUnixTime;
 use super::*;
 
 pub async fn build_movies(_coll: &Collection, _pace: u32) {
     todo!()
 }
 
-/*
-pub async fn update_movies(db: &DataBase, coll: &Collection, pace: u32) {
-
-    let mut d = match fs::read_dir(&coll.directory).await {
-        Ok(d) => d,
-        Err(_) => return,
-    };
-    let mut items = Vec::new();
-
-    while let Ok(Some(entry)) = d.next_entry().await {
-
-        // We might want to pace ourselves.
-        if pace > 0 {
-            tokio::time::sleep(Duration::from_secs(pace as u64)).await;
-        }
-
-        // Get a valid filename.
-        let file_name = entry.file_name();
-        let name = match file_name.to_str() {
-            Some(name) => name,
-            None => continue,
-        };
-        if name.starts_with(".") || name.starts_with("+ ") {
-            continue;
-        }
-
-        // Do we have this in the database? Check by filename.
-        if let Some(dbitem) = db.find_basic_info_by_path(coll, name).await {
-            update_movie(coll, Some(dbitem), None);
-            continue;
-        }
-
-        // We don't. So read the directory.
-        if let Some(movie) = build_movie(coll, name, true).await {
-            update_movie(coll, None, Some(movie));
-        }
-    }
-}
-*/
-
-pub async fn build_movie(coll: &Collection, name: &str, parse_nfo: bool) -> Option<Movie> {
+pub async fn build_movie(coll: &Collection, dirname: &str, dbent: &Movie) -> Option<Movie> {
 
     // First get all directory entries.
-    let mut dirname = PathBuf::from(&coll.directory);
-    dirname.push(name);
+    let mut dirpath = PathBuf::from(&coll.directory);
+    dirpath.push(dirname);
     let mut entries = Vec::new();
-    let mut d = fs::read_dir(&dirname).await.ok()?;
+    let mut d = fs::read_dir(&dirpath).await.ok()?;
     while let Ok(Some(entry)) = d.next_entry().await {
         entries.push(entry);
     }
 
     // Collect timestamps.
     let mut added_ts = Vec::new();
-    let meta = tokio::fs::metadata(&dirname).await.ok()?;
+    let meta = tokio::fs::metadata(&dirpath).await.ok()?;
     let modified = meta.modified().ok()?;
     added_ts.push(modified);
     if let Ok(created) = meta.created() {
@@ -104,7 +65,7 @@ pub async fn build_movie(coll: &Collection, name: &str, parse_nfo: bool) -> Opti
     // Get the year from the directory name. This will be used if we cannot
     // find it in the NFO file.
     // TODO FIXME also use as fall-back title.
-    let year = IS_YEAR.captures(name).map(|caps| caps[1].parse::<u32>().unwrap());
+    let year = IS_YEAR.captures(dirname).map(|caps| caps[1].parse::<u32>().unwrap());
 
     // `added_ts` contains a list of dates, use the oldest as `added`.
     added_ts.sort();
@@ -112,9 +73,10 @@ pub async fn build_movie(coll: &Collection, name: &str, parse_nfo: bool) -> Opti
 
     // Initial Movie.
     let mut movie = Movie {
+        lastmodified: modified.unixtime_ms(),
         collection_id: coll.collection_id as i64,
         directory: sqlx::types::Json(FileInfo {
-            path: name.to_string(),
+            path: dirname.to_string(),
             inode: meta.ino(),
             size: meta.len(),
         }),
@@ -185,32 +147,36 @@ pub async fn build_movie(coll: &Collection, name: &str, parse_nfo: bool) -> Opti
 
         // NFO file found. Parse it.
         if ext == "nfo" {
-            let mut inode = 0;
-            let mut size = 0;
-            let mut nfo_path = PathBuf::from(&coll.directory);
-            nfo_path.push(&dirname);
-            nfo_path.push(name);
-            if parse_nfo {
-                if let Ok(mut file) = fs::File::open(&nfo_path).await {
-                    match super::Nfo::read(&mut file).await {
-                        Ok(nfo) => {
-                            nfo.update_movie(&mut movie);
-                            if movie.nfo_movie.premiered.is_none() && year.is_some() {
-                                movie.nfo_movie.premiered = Some(format!("{}-01-01", year.unwrap()));
-                            }
-                            let m = file.metadata().await.unwrap();
-                            inode = m.ino();
-                            size = m.len();
-                        },
-                        Err(e) => println!("error reading nfo: {}", e),
-                    }
-                }
+            let (mut file, fileinfo) = match FileInfo::open(&coll.directory, dirname, name).await {
+                Ok(f) => f,
+                Err(_) => continue,
+            };
+
+            // Same? Fine.
+            let dbent_nfofile = dbent.nfofile.as_ref().map(|f| &f.0);
+            if dbent_nfofile == Some(&fileinfo) {
+                continue;
             }
-            movie.nfofile = Some(sqlx::types::Json(FileInfo {
-                path: nfo_path.to_str().unwrap().to_string(),
-                inode,
-                size,
-            }));
+
+            match super::Nfo::read(&mut file).await {
+                Ok(nfo) => {
+                    nfo.update_movie(&mut movie);
+                    if movie.nfo_movie.premiered.is_none() && year.is_some() {
+                        movie.nfo_movie.premiered = Some(format!("{}-01-01", year.unwrap()));
+                    }
+                    if let Ok(m) = file.metadata().await.unwrap().modified() {
+                        let t = m.unixtime_ms();
+                        if t > movie.lastmodified {
+                            movie.lastmodified = t;
+                        }
+                    }
+                    movie.nfofile = Some(sqlx::types::Json(fileinfo));
+                },
+                Err(e) => {
+                    println!("error reading nfo: {}", e);
+                    continue;
+                },
+            }
         }
     }
 

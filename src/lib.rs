@@ -10,3 +10,4 @@ pub mod genres;
 pub mod kodifs;
 pub mod models;
 pub mod server;
+pub mod util;

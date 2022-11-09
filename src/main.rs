@@ -4,6 +4,7 @@ use structopt::StructOpt;
 use notflix_backend::collections;
 use notflix_backend::config;
 use notflix_backend::db;
+use notflix_backend::models;
 use notflix_backend::kodifs;
 use notflix_backend::server;
 
@@ -124,7 +125,8 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
             let file_name = m.next().unwrap();
             coll.directory = m.next().unwrap_or(".").to_string();
 
-            match kodifs::build_movie(&mut coll, file_name, true).await {
+            let mv = models::Movie::default();
+            match kodifs::build_movie(&mut coll, file_name, &mv).await {
                 Some(item) => println!("{}", serde_json::to_string_pretty(&item)?),
                 None => println!("no movie found"),
             }

@@ -16,8 +16,8 @@ use serde::{de, Deserialize, Serialize};
 use serde_xml_rs::from_str;
 
 use crate::collections::Item;
-use crate::kodifs::systemtime_to_ms;
 use crate::models::{self, NfoBase, NfoMovie};
+use crate::util::SystemTimeToUnixTime;
 
 /// Thumbnail
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -274,13 +274,13 @@ impl Nfo {
         };
 
         let mut file = fs::File::open(nfo_path).await?;
-        let modified = systemtime_to_ms(file.metadata().await.map(|m| m.modified().unwrap())?);
-        if item.nfo_time > 0 && item.nfo_time == modified {
+        let modified = file.metadata().await.map(|m| m.modified().unwrap())?.unixtime_ms();
+        if item.nfo_time > 0 && item.nfo_time as i64 == modified {
             return Ok(false);
         }
         let nfo = Nfo::read(&mut file).await?;
 
-        item.nfo_time = modified;
+        item.nfo_time = modified as u64;
         item.genre = nfo.genre;
         item.rating = nfo.rating;
         item.votes = nfo.votes;
