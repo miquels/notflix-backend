@@ -5,7 +5,7 @@ use super::nfo::build_struct;
 use super::misc::{Rating, Thumb, UniqueId, Actor};
 use super::{NfoBase, NfoMovie, FileInfo, J, JV, is_default};
 
-#[derive(Serialize, Default, Debug, sqlx::FromRow)]
+#[derive(Serialize, Clone, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
 pub struct Movie {
     // Common.

@@ -15,9 +15,7 @@ use scan_fmt::scan_fmt;
 use serde::{de, Deserialize, Serialize};
 use serde_xml_rs::from_str;
 
-use crate::collections::Item;
 use crate::models::{self, NfoBase, NfoMovie};
-use crate::util::SystemTimeToUnixTime;
 
 /// Thumbnail
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -263,30 +261,6 @@ impl Nfo {
 
         //println!("{:#?}", nfo);
         Ok(nfo)
-    }
-
-    // Compare the NFO file data with the 'Item'.
-    pub async fn update_item(item: &mut Item) -> anyhow::Result<bool> {
-
-        let nfo_path = match item.nfo_path {
-            Some(ref p) => p,
-            None => return Ok(false),
-        };
-
-        let mut file = fs::File::open(nfo_path).await?;
-        let modified = file.metadata().await.map(|m| m.modified().unwrap())?.unixtime_ms();
-        if item.nfo_time > 0 && item.nfo_time as i64 == modified {
-            return Ok(false);
-        }
-        let nfo = Nfo::read(&mut file).await?;
-
-        item.nfo_time = modified as u64;
-        item.genre = nfo.genre;
-        item.rating = nfo.rating;
-        item.votes = nfo.votes;
-        item.year = nfo.year;
-
-        Ok(true)
     }
 
     /// Fill `NfoBase` with data from the nfo file.

@@ -126,18 +126,13 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
             coll.directory = m.next().unwrap_or(".").to_string();
 
             let mv = models::Movie::default();
-            match kodifs::build_movie(&mut coll, file_name, &mv).await {
+            match kodifs::update_movie(&coll, file_name, &mv).await {
                 Some(item) => println!("{}", serde_json::to_string_pretty(&item)?),
                 None => println!("no movie found"),
             }
         }
         if opts.movies {
-            kodifs::build_movies(&coll, 0).await;
-            let items = coll.get_items().await;
-            match items.len() {
-                0 => println!("no movies found"),
-                _ => println!("{}", serde_json::to_string_pretty(&items)?),
-            }
+            eprintln!("not implemented");
         }
     }
     if opts.tvshow || opts.tvshows {

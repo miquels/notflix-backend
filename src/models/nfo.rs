@@ -2,7 +2,7 @@ use serde::{Serialize, Deserialize};
 use super::is_default;
 use super::misc::{Rating, UniqueId, Actor};
 
-#[derive(Serialize, Deserialize, Default, Debug, sqlx::FromRow)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
 pub struct NfoBase {
     // Basic NFO
@@ -24,7 +24,7 @@ pub struct NfoBase {
     pub directors: sqlx::types::Json<Vec<String>>,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, sqlx::FromRow)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
 pub struct NfoMovie {
     // Detail NFO (Movie + TV Show)

@@ -8,11 +8,7 @@ use crate::models::{FileInfo, Movie, Thumb};
 use crate::util::SystemTimeToUnixTime;
 use super::*;
 
-pub async fn build_movies(_coll: &Collection, _pace: u32) {
-    todo!()
-}
-
-pub async fn build_movie(coll: &Collection, dirname: &str, dbent: &Movie) -> Option<Movie> {
+pub async fn update_movie(coll: &Collection, dirname: &str, dbent: &Movie) -> Option<Movie> {
 
     // First get all directory entries.
     let mut dirpath = PathBuf::from(&coll.directory);
@@ -62,10 +58,12 @@ pub async fn build_movie(coll: &Collection, dirname: &str, dbent: &Movie) -> Opt
         return None;
     }
 
-    // Get the year from the directory name. This will be used if we cannot
-    // find it in the NFO file.
-    // TODO FIXME also use as fall-back title.
-    let year = IS_YEAR.captures(dirname).map(|caps| caps[1].parse::<u32>().unwrap());
+    // If the directory name ends with <space>(YYYY) then it's a year.
+    // Remember that year as backup in case there's no NFO file.
+    let (title, year) = match IS_YEAR.captures(dirname) {
+        Some(caps) => (Some(caps[1].to_string()), Some(caps[2].parse::<u32>().unwrap())),
+        None => (Some(dirname.to_string()), None),
+    };
 
     // `added_ts` contains a list of dates, use the oldest as `added`.
     added_ts.sort();
@@ -152,15 +150,21 @@ pub async fn build_movie(coll: &Collection, dirname: &str, dbent: &Movie) -> Opt
                 Err(_) => continue,
             };
 
-            // Same? Fine.
+            // Same? Just copy it.
             let dbent_nfofile = dbent.nfofile.as_ref().map(|f| &f.0);
             if dbent_nfofile == Some(&fileinfo) {
-                continue;
+               movie.nfo_base = dbent.nfo_base.clone();
+               movie.nfo_movie = dbent.nfo_movie.clone();
+               movie.nfofile = dbent.nfofile.clone();
+               continue;
             }
 
             match super::Nfo::read(&mut file).await {
                 Ok(nfo) => {
                     nfo.update_movie(&mut movie);
+                    if movie.nfo_base.title.is_none() && title.is_some() {
+                        movie.nfo_base.title = title.clone();
+                    }
                     if movie.nfo_movie.premiered.is_none() && year.is_some() {
                         movie.nfo_movie.premiered = Some(format!("{}-01-01", year.unwrap()));
                     }

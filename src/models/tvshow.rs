@@ -5,7 +5,7 @@ use super::nfo::build_struct;
 use super::misc::{Actor, Rating, Thumb, UniqueId};
 use super::{Episode, NfoBase, NfoMovie, FileInfo, J, JV, is_default};
 
-#[derive(Serialize, Default, Debug, sqlx::FromRow)]
+#[derive(Serialize, Clone, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
 pub struct TVShow {
     // Common.
@@ -231,7 +231,7 @@ impl TVShow {
     }
 }
 
-#[derive(Serialize, Default, Debug, sqlx::FromRow)]
+#[derive(Serialize, Clone, Default, Debug, sqlx::FromRow)]
 pub struct Season {
     pub season:   u32,
     pub episodes: Vec<Episode>,

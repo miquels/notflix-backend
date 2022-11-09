@@ -1,7 +1,7 @@
 use std::os::unix::fs::MetadataExt;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
 pub struct FileInfo {
     pub path:   String,
     pub inode:  u64,

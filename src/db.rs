@@ -27,7 +27,7 @@ impl Db {
         })
     }
 
-    pub async fn sync_movie(&self, coll: &Collection, name: &str) {
+    pub async fn sync_movie(&self, _coll: &Collection, _name: &str) {
         todo!()
     }
 

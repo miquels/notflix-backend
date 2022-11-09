@@ -7,7 +7,7 @@ use super::nfo::build_struct;
 use super::misc::{Rating, Thumb, UniqueId, Actor};
 use super::{J, JV, FileInfo, NfoBase, is_default};
 
-#[derive(Serialize, serde::Deserialize, Default, Debug, sqlx::FromRow)]
+#[derive(Serialize, serde::Deserialize, Clone, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
 pub struct Episode {
     // Common.

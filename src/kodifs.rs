@@ -1,5 +1,3 @@
-use std::time::SystemTime;
-
 use once_cell::sync::Lazy;
 use regex::Regex;
 use url::Url;
@@ -9,7 +7,7 @@ mod nfo;
 mod scandirs;
 mod shows;
 
-pub use movies::{build_movie, build_movies};
+pub use movies::update_movie;
 pub use scandirs::{scan_directory, scan_directories};
 pub use shows::{build_show, build_shows};
 pub use nfo::Nfo;
@@ -27,7 +25,7 @@ def_regex!(IS_SEASON_IMG => r#"^season([0-9]+)-?([a-z]+|)\.(jpg|jpeg|png|tbn)$"#
 def_regex!(IS_SHOW_SUBDIR => r#"^S([0-9]+)|Specials([0-9]*)$"#);
 def_regex!(IS_EXT1 => r#"^(.*)\.(png|jpg|jpeg|tbn|nfo|srt)$"#);
 def_regex!(IS_EXT2 => r#"^(.*)[.-]([a-z]+)\.(png|jpg|jpeg|tbn|nfo|srt)$"#);
-def_regex!(IS_YEAR => r#" \(([0-9]+)\)$"#);
+def_regex!(IS_YEAR => r#"^(.*) \(([0-9]{4})\)$"#);
 
 /// URL escape a path - relative or absolute.
 pub fn escape_path(p: &str) -> String {
