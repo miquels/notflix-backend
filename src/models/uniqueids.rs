@@ -11,7 +11,7 @@ pub struct UniqueIds{
     pub ids: Vec<UniqueId>
 }
 
-#[derive(Serialize, Clone, Default, Debug, PartialEq)]
+#[derive(Serialize, Clone, Default, Debug, PartialEq, sqlx::FromRow)]
 #[serde(default)]
 pub struct UniqueId {
     #[serde(skip)]
@@ -43,6 +43,50 @@ impl UniqueIds {
             mediaitem_id,
             ids,
         })
+    }
+
+    #[allow(dead_code)]
+    pub async fn get_mediaitem_id(db: &Db, uids: &UniqueIds) -> Option<i64> {
+
+        if uids.ids.len() == 0 {
+            return None;
+        }
+
+        // Well, this is ugly, but I don't know a better way.
+
+        // First, build the query.
+        let mut query_str = String::from(
+            r#"SELECT id, mediaitem_id, idtype, is_default AS "default: bool", uniqueid
+               FROM uniqueids"#
+        );
+        for idx in 0 .. uids.ids.len() {
+            if idx == 0 {
+                query_str.push_str(" WHERE ");
+            } else {
+                query_str.push_str(" AND ");
+            }
+            query_str.push_str("idtype = ? AND uniqueid = ?");
+        }
+
+        // Now build the basic query and bind the args.
+        let mut query = sqlx::query_as::<_, UniqueId>(&query_str);
+        for uid in &uids.ids {
+            query = query.bind(&uid.idtype);
+            query = query.bind(&uid.uniqueid);
+        }
+
+        // And execute it.
+        let ids = query
+            .fetch_all(&db.handle)
+            .await
+            .ok()?;
+
+        if ids.len() == 0 {
+            return None;
+        }
+
+        // FIXME: check if there's only one unique mediaitem_id.
+        Some(ids[0].mediaitem_id)
     }
 
     #[allow(dead_code)]
