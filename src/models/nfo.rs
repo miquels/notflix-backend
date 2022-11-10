@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 use super::is_default;
-use super::misc::{Rating, UniqueId, Actor};
+use super::{Rating, UniqueId, Actor};
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug, sqlx::FromRow)]
 #[serde(default)]

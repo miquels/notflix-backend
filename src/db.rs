@@ -4,11 +4,10 @@
 /// the database.
 
 use anyhow::{Context, Result, bail};
-use futures_util::TryStreamExt;
 use sqlx::sqlite::SqlitePool;
 
 use crate::collections::Collection;
-use crate::models::{FileInfo, Movie, UniqueId};
+use crate::models::{Movie, UniqueId, UniqueIds};
 use crate::kodifs;
 
 pub type DbHandle = SqlitePool;
@@ -31,116 +30,93 @@ impl Db {
     // Update one movie.
     pub async fn update_movie(&self, coll: &Collection, name: &str) -> Result<()> {
 
-        // First, get the movie from the database.
-        let mut by = FindItemBy::new();
-        by.directory = Some(name);
-        let oldmovie = match Movie::lookup(self, &by).await {
-            Some(mv) => mv,
-            None => Movie::default(),
-        };
+        // Try to get the movie from the database by collection id and directory name.
+        let by = FindItemBy::directory(coll.collection_id, name);
+        let mut oldmovie = Movie::lookup_by(self, &by).await.unwrap_or_else(|| Movie::default());
+
+        // If not found, read the NFO file to get the uniqueids, and search for that.
+        if oldmovie.id == 0 {
+            // println!("movie not found by dirname"); 
+            if let Some(mv) = kodifs::update_movie(coll, name, &oldmovie, true).await {
+                // println!("succeeded in reading nfo: {:?}", mv.nfo_base.uniqueids);
+                let by = FindItemBy::uniqueids(&mv.nfo_base.uniqueids);
+                if let Some(id) = self.lookup(&by).await {
+                    // println!("found existing movie via uniqueids: {id}");
+                    let by = FindItemBy::id(id);
+                    if let Some(oldmv) = Movie::lookup_by(self, &by).await {
+                        // println!("Found oldmovie in database");
+                        oldmovie = oldmv;
+                        oldmovie.directory = mv.directory.clone();
+                        oldmovie.lastmodified = 1;
+                    } else {
+                        // println!("movie not in database, but re-using id");
+                        oldmovie.id = id;
+                    }
+                }
+            }
+        }
 
         // Now scan the movie directory.
-        let mut movie = match kodifs::update_movie(coll, name, &oldmovie).await {
+        let mut movie = match kodifs::update_movie(coll, name, &oldmovie, false).await {
             Some(mv) => mv,
             None => bail!("failed to scan directory {}", name),
         };
 
         // insert or update?
         if oldmovie.id == 0 {
+            // println!("INSERT movie");
             // No ID yet, so it doesn't exist in the database.
             movie.insert(self).await
                 .with_context(|| format!("failed to insert db for {}", name))?;
+            let uids = UniqueIds::new(movie.id);
+            uids.update(self, &movie.nfo_base.uniqueids).await?;
         } else if movie.lastmodified > oldmovie.lastmodified && oldmovie.lastmodified != 0 {
+            // println!("UPDATE movie");
             // There was an update, so update the database.
             movie.update(self).await
                 .with_context(|| format!("failed to update db for {}", name))?;
+            let uids = UniqueIds::new(movie.id);
+            uids.update(self, &movie.nfo_base.uniqueids).await?;
         }
 
         Ok(())
     }
 
-    // TODO: if multiple matches, return the one we trust most (a match on 'id'
-    //       has 100% trust, ofcourse).
-    //       Later, return a Vec of (id, matched_on, trust) instead of just one value.
     pub async fn lookup(&self, by: &FindItemBy<'_>) -> Option<i64> {
-        // If we match on id, return right away.
-        // It's basically just a test 'is this entry in the db'.
-        if let Some(id) = by.id {
-            let row = sqlx::query!(
-                r#"
-                    SELECT i.id
-                    FROM mediaitems i
-                    WHERE i.id == ?"#,
-                id
-            )
-            .fetch_one(&self.handle)
-            .await
-            .ok();
-            if row.is_some() {
-                return Some(id);
-            }
-        }
-
-        #[derive(sqlx::FromRow)]
-        struct Result {
-            id: i64,
-            directory: sqlx::types::Json<FileInfo>,
-            title: Option<String>,
-            pub uniqueids: sqlx::types::Json<Vec<UniqueId>>,
-        }
-        let mut rows = sqlx::query_as!(
-            Result,
+        let id = sqlx::query!(
             r#"
-                SELECT  i.id,
-                        i.directory AS "directory: _",
-                        i.title, 
-                        i.uniqueids AS "uniqueids: _"
+                SELECT  i.id
                 FROM mediaitems i
-                WHERE i.collection_id = ? OR ? IS NULL"#,
+                WHERE (? IS NULL OR collection_id = ?)
+                  AND (id = ? OR directory = ? OR title = ?)"#,
                 by.collection_id,
                 by.collection_id,
+                by.id,
+                by.directory,
+                by.title,
         )
-        .fetch(&self.handle);
+        .fetch_optional(&self.handle)
+        .await
+        .ok()
+        .flatten()
+        .map(|row| row.id);
 
-        // Inspect each row. Could do this in SQL, but we might want to
-        // compare directory and/or title in a fuzzy way.
-        while let Some(row) = rows.try_next().await.unwrap_or(None) {
-            let mut res = false;
-            res |= by.id.map(|x| x == row.id).unwrap_or(false);
-            res |= by.imdb.map(|x| has_uid(&row.uniqueids, "imdb", x)).unwrap_or(false);
-            res |= by.tmdb.map(|x| has_uid(&row.uniqueids, "tmdb", x)).unwrap_or(false);
-            res |= by.tvdb.map(|x| has_uid(&row.uniqueids, "tvdb", x)).unwrap_or(false);
-            res |= by.directory.map(|x| x == row.directory.path).unwrap_or(false);
-            let title = row.title.as_ref().map(|p| p.as_str());
-            res |= by.title.is_some() && by.title == title;
-            if res {
-                return Some(row.id);
-            }
+        if id.is_some() {
+            return id;
         }
-        None
+
+        // OK now the UniqueId lookup.
+        UniqueIds::get_mediaitem_id(self, &by.uniqueids).await
     }
 }
 
-// helper.
-fn has_uid(uids: &Vec<UniqueId>, idtype: &str, id: &str) -> bool {
-    for uid in uids {
-        let uid_idtype = uid.idtype.as_ref().map(|s| s.as_str()).unwrap_or("");
-        if uid_idtype == idtype && uid.id == id {
-            return true;
-        }
-    }
-    false
-}
-
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct FindItemBy<'a> {
     pub id: Option<i64>,
     pub collection_id: Option<i64>,
-    pub imdb: Option<&'a str>,
-    pub tmdb: Option<&'a str>,
-    pub tvdb: Option<&'a str>,
-    pub title: Option<&'a str>,
     pub directory: Option<&'a str>,
+    pub title: Option<&'a str>,
+    pub uniqueids: &'a [UniqueId],
 }
 
 impl<'a> FindItemBy<'a> {
@@ -149,14 +125,23 @@ impl<'a> FindItemBy<'a> {
         FindItemBy::default()
     }
 
+    pub fn id(id: i64) -> FindItemBy<'a> {
+        FindItemBy { id: Some(id), ..FindItemBy::default() }
+    }
+
+    pub fn uniqueids(uids: &'a [UniqueId]) -> FindItemBy<'a> {
+        FindItemBy { uniqueids: uids, ..FindItemBy::default() }
+    }
+
+    pub fn directory(coll_id: u32, dir: &'a str) -> FindItemBy<'a> {
+        FindItemBy { collection_id: Some(coll_id as i64), directory: Some(dir), ..FindItemBy::default() }
+    }
+
     pub(crate) fn is_only_id(&self) -> Option<i64> {
         if let Some(id) = self.id {
-            if self.imdb.is_none() &&
-                self.imdb.is_none() &&
-                self.tmdb.is_none() &&
-                self.tvdb.is_none() &&
-                self.title.is_none() &&
-                self.directory.is_none() {
+            if self.title.is_none() &&
+               self.directory.is_none() &&
+               self.uniqueids.len() == 0 {
                 return Some(id);
             }
         }

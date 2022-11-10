@@ -10,8 +10,9 @@ pub use movie::Movie;
 pub use tvshow::{TVShow, Season};
 pub use episode::Episode;
 pub use fileinfo::FileInfo;
+pub use uniqueids::UniqueIds;
 pub use misc::*;
-pub use nfo::*;
+pub use nfo::{NfoBase, NfoMovie};
 
 type J<T> = sqlx::types::Json<T>;
 type JV<T> = sqlx::types::Json<Vec<T>>;

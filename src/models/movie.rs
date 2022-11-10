@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::Serialize;
 use crate::db::{Db, FindItemBy};
 use super::nfo::build_struct;
-use super::misc::{Rating, Thumb, UniqueId, Actor};
+use super::{Rating, Thumb, UniqueId, Actor};
 use super::{NfoBase, NfoMovie, FileInfo, J, JV, is_default};
 
 #[derive(Serialize, Clone, Default, Debug, sqlx::FromRow)]
@@ -42,11 +42,15 @@ pub struct Movie {
 }
 
 impl Movie {
-    pub async fn lookup(db: &Db, find: &FindItemBy<'_>) -> Option<Movie> {
+    pub async fn lookup_by(db: &Db, find: &FindItemBy<'_>) -> Option<Movie> {
+
+        // Find the ID.
         let id = match find.is_only_id() {
             Some(id) => id,
             None => db.lookup(&find).await?,
         };
+
+        // Find the item in the database.
         let r = sqlx::query!(
             r#"
                 SELECT i.id AS "id: i64",
@@ -79,6 +83,7 @@ impl Movie {
         .fetch_one(&db.handle)
         .await
         .ok()?;
+
         build_struct!(Movie, r,
             id, collection_id, directory, lastmodified, dateadded, nfofile, thumbs,
             nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.ratings,
@@ -89,6 +94,7 @@ impl Movie {
     }
 
     pub async fn insert(&mut self, db: &Db) -> Result<()> {
+        let old_id = self.id;
         self.id = sqlx::query!(
             r#"
                 INSERT INTO mediaitems(
@@ -126,6 +132,20 @@ impl Movie {
         .execute(&db.handle)
         .await?
         .last_insert_rowid();
+
+        if old_id != 0 {
+            sqlx::query!(
+                r#"
+                    UPDATE mediaitems
+                    SET id = ?
+                    WHERE id = ?"#,
+                old_id,
+                self.id
+            )
+            .execute(&db.handle)
+            .await?;
+            self.id = old_id;
+        }
 
         sqlx::query!(
             r#"

@@ -1,11 +1,24 @@
 use std::os::unix::fs::MetadataExt;
+use std::time::SystemTime;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct FileInfo {
     pub path:   String,
     pub inode:  u64,
     pub size:   u64,
+    pub modified: SystemTime,
+}
+
+impl std::default::Default for FileInfo {
+    fn default() -> FileInfo {
+        FileInfo {
+            path: String::new(),
+            inode: 0,
+            size: 0,
+            modified: SystemTime::UNIX_EPOCH,
+        }
+    }
 }
 
 use std::io;
@@ -35,6 +48,7 @@ impl FileInfo {
             path: FileInfo::join("", subdir, path),
             inode: m.ino(),
             size: m.len(),
+            modified: m.modified()?,
         })
     }
 
@@ -49,6 +63,7 @@ impl FileInfo {
             path: FileInfo::join("", subdir, path),
             inode: m.ino(),
             size: m.len(),
+            modified: m.modified()?,
         }))
     }
 }

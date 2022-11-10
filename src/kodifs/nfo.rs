@@ -278,9 +278,9 @@ impl Nfo {
             .collect::<Vec<_>>();
         let mut uniqueids = self.uniqueid
             .iter()
-            .filter(|i| i.id.is_some())
+            .filter(|i| i.id.is_some() && i.idtype.is_some())
             .map(|i| models::UniqueId {
-                idtype: i.idtype.clone(),
+                idtype: i.idtype.clone().unwrap(),
                 default: i.default.unwrap_or(false),
                 id: i.id.clone().unwrap(),
             })
@@ -321,7 +321,7 @@ impl Nfo {
             if let Some(id) = self.imdbid.as_ref().or_else(|| self.id.as_ref()) {
                 if id.starts_with("tt") {
                     uniqueids.push(models::UniqueId {
-                        idtype: Some("imdb".to_string()),
+                        idtype: "imdb".to_string(),
                         default,
                         id: id.to_string(),
                     });
@@ -331,7 +331,7 @@ impl Nfo {
             if let Some(id) = self.tmdbid.as_ref() {
                 if id.len() > 0 && id != "0" {
                     uniqueids.push(models::UniqueId {
-                        idtype: Some("tmdb".to_string()),
+                        idtype: "tmdb".to_string(),
                         default,
                         id: id.to_string(),
                     });
@@ -341,11 +341,20 @@ impl Nfo {
             if let Some(id) = self.tvdbid.as_ref() {
                 if id.len() > 0 && id != "0" {
                     uniqueids.push(models::UniqueId {
-                        idtype: Some("tvdb".to_string()),
+                        idtype: "tvdb".to_string(),
                         default,
                         id: id.to_string(),
                     });
                 }
+            }
+
+            // Last resort.
+            if uniqueids.len() == 0 && self.id.is_some() {
+                uniqueids.push(models::UniqueId {
+                    idtype: "nfoid".to_string(),
+                    default: false,
+                    id: self.id.clone().unwrap(),
+                });
             }
         }
 

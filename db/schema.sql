@@ -133,10 +133,11 @@ CREATE TABLE uniqueids(
   -- uniqueid is a imdb-id, or tvdb-id, etc.
   uniqueid TEXT NOT NULL,
 
-  is_default INTEGER DEFAULT 0 NOT NULL,
+  is_default INTEGER DEFAULT 0 NOT NULL
 
-  FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
+  -- FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
 );
+CREATE UNIQUE INDEX uniqueids_idx ON uniqueids(idtype, uniqueid);
 
 CREATE TABLE actors_in_item(
   id INTEGER PRIMARY KEY NOT NULL,

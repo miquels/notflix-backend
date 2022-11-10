@@ -43,11 +43,11 @@ pub struct Rating {
     pub votes:    Option<u32>,
 }
 
-#[derive(Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, Default, Debug, PartialEq, sqlx::FromRow)]
 #[serde(default)]
 pub struct UniqueId {
     #[serde(rename = "type")]
-    pub idtype: Option<String>,
+    pub idtype: String,
     pub default: bool,
     pub id: String,
 }

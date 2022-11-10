@@ -158,7 +158,7 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
             coll.directory = m.next().unwrap_or(".").to_string();
 
             let mv = models::Movie::default();
-            match kodifs::update_movie(&coll, file_name, &mv).await {
+            match kodifs::update_movie(&coll, file_name, &mv, false).await {
                 Some(item) => println!("{}", serde_json::to_string_pretty(&item)?),
                 None => println!("no movie found"),
             }
