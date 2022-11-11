@@ -7,46 +7,8 @@ use crate::collections::Collection;
 use crate::models::{TVShow, Season, Thumb, Episode, FileInfo};
 use super::*;
 
-pub async fn build_shows(_coll: &Collection, _pace: u32) {
-    todo!()
-}
-
-/*
-pub async fn build_shows(coll: &Collection, pace: u32) {
-
-    let mut d = match fs::read_dir(&coll.directory).await {
-        Ok(d) => d,
-        Err(_) => return,
-    };
-    let mut items = Vec::new();
-
-    while let Ok(Some(entry)) = d.next_entry().await {
-        let file_name = entry.file_name();
-        let name = match file_name.to_str() {
-            Some(name) => name,
-            None => continue,
-        };
-        if name.starts_with(".") || name.starts_with("+ ") {
-            continue;
-        }
-
-        if let Some(m) = Item::build_show(coll, name).await {
-            items.push(ArcSwap::new(Arc::new(m)));
-        }
-        if pace > 0 {
-            tokio::time::sleep(Duration::from_secs(pace as u64)).await;
-        }
-    }
-    // XXX FIXME: merge strategy:
-    // - use unique_id
-    // - if show is gone, mark as deleted, don't really delete
-    //   (that will allow it to be restored later)
-    *coll.items.lock().unwrap() = items;
-}
-*/
-
 pub async fn build_show(coll: &Collection, name: &str) -> Option<TVShow> {
-    Show::build_show(coll, name).await
+    Show::build_show(coll, name, &mut TVShow::default(), false).await
 }
 
 #[derive(Debug)]
@@ -58,8 +20,10 @@ struct EpMap {
 #[derive(Default, Debug)]
 pub struct Show {
     ep_map:  HashMap<String, EpMap>,
+    db_ep_map:  HashMap<String, EpMap>,
     basedir: String,
     season_hint: Option<u32>,
+    nfo_only: bool,
     tvshow:  TVShow,
     seasons: Vec<Season>,
 }
@@ -94,8 +58,7 @@ impl Show {
     // It can be the base directory, in which case 'self.season_hint' is None,
     // or it can be a season subdirectory (like S01/) and then season_hint is Some(1).
     #[async_recursion::async_recursion]
-    async fn show_scan_dir(&mut self, subdir: Option<&'async_recursion str>) {
-
+    async fn show_scan_dir<'a: 'async_recursion>(&mut self, subdir: Option<&'a str>, dbent: &'a TVShow) {
         // Read the entire directory in one go.
         let dir = match subdir {
             Some(subdir) => format!("{}/{}", &self.basedir, subdir),
@@ -107,31 +70,27 @@ impl Show {
         };
         let mut entries = Vec::new();
         while let Ok(Some(entry)) = d.next_entry().await {
-            entries.push(entry);
+            if let Ok(name) = entry.file_name().into_string() {
+                if !name.starts_with(".") && !name.starts_with("+ ") {
+                    entries.push(name);
+                }
+            }
         }
-        entries.sort_by_key(|e| e.file_name());
+        entries.sort();
 
         // Process each file.
-        for entry in &entries {
-
-            // Get filename of this entry. Skip non-utf8 and dotfiles.
-            let file_name = entry.file_name();
-            let name = match file_name.to_str() {
-                Some(name) => name,
-                None => continue,
-            };
-            if name.starts_with(".") || name.starts_with("+ ") {
-                continue;
-            }
+        for name in &entries {
 
             // first things that can only be found in the shows basedir, not in subdirs.
-            if self.season_hint.is_none() {
+            if subdir.is_none() {
 
                 // S* subdir.
                 if let Some(s) = IS_SHOW_SUBDIR.captures(name) {
-                    self.season_hint = s[1].parse::<u32>().ok();
-                    self.show_scan_dir(Some(name)).await;
-                    self.season_hint = None;
+                    if !self.nfo_only {
+                        self.season_hint = s[1].parse::<u32>().ok();
+                        self.show_scan_dir(subdir, dbent).await;
+                        self.season_hint = None;
+                    }
                     continue;
                 }
 
@@ -153,6 +112,9 @@ impl Show {
                     continue;
                 }
             }
+            if self.nfo_only {
+                continue;
+            }
 
             // Handle images.
             if self.tvshow_image_file(name, subdir).await {
@@ -164,10 +126,8 @@ impl Show {
         }
 
         // Now scan the directory again for episode-related files.
-        for entry in &entries {
-            if let Some(name) = entry.file_name().to_str() {
-                self.add_related_file(name, subdir).await;
-            }
+        for name in &entries {
+            self.add_related_file(name, subdir).await;
         }
     }
 
@@ -350,7 +310,7 @@ impl Show {
         }
     }
 
-    async fn build_show(coll: &Collection, dir: &str) -> Option<TVShow> {
+    async fn build_show(coll: &Collection, dir: &str, dbent: &mut TVShow, nfo_only: bool) -> Option<TVShow> {
 
         let fileinfo = FileInfo::from_path(&coll.directory, "", dir).await.ok()?;
         let tvshow = TVShow {
@@ -360,10 +320,23 @@ impl Show {
         let mut item = Show {
             basedir: join_paths(Some(&coll.directory), dir),
             tvshow,
+            nfo_only,
             ..Show::default()
         };
 
-        item.show_scan_dir(None).await;
+        // Index the episodes from the database's TVShow.
+        for season_idx in 0 .. dbent.seasons.len() {
+            let season = &dbent.seasons[season_idx];
+            for episode_idx in 0 .. season.episodes.len() {
+                let episode = &season.episodes[episode_idx];
+                if let Some(s) = IS_VIDEO.captures(&episode.video.path) {
+                    let basename = s[1].split('/').last().unwrap();
+                    item.db_ep_map.insert(basename.to_string(), EpMap { season_idx, episode_idx });
+                }
+            }
+        }
+
+        item.show_scan_dir(None, dbent).await;
 
         for season_idx in 0 .. item.seasons.len() {
             // remove episodes without video

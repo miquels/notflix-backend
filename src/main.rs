@@ -158,7 +158,7 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
             coll.directory = m.next().unwrap_or(".").to_string();
 
             let mv = models::Movie::default();
-            match kodifs::update_movie(&coll, file_name, &mv, false).await {
+            match kodifs::scan_movie_dir(&coll, file_name, &mv, false).await {
                 Some(item) => println!("{}", serde_json::to_string_pretty(&item)?),
                 None => println!("no movie found"),
             }
@@ -170,6 +170,7 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
     if opts.tvshow || opts.tvshows {
         let mut coll = collections::Collection {
             name: "TV Shows".to_string(),
+            collection_id: 2,
             type_: "shows".to_string(),
             directory: opts.directory.clone(),
             baseurl: "/".to_string(),
@@ -186,12 +187,7 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
             }
         }
         if opts.tvshows {
-            kodifs::build_shows(&coll, 0).await;
-            let items = coll.get_items().await;
-            match items.len() {
-                0 => println!("no shows found"),
-                _ => println!("{}", serde_json::to_string_pretty(&items)?),
-            }
+            eprintln!("not implemented");
         }
     }
     Ok(())
