@@ -7,9 +7,9 @@ mod nfo;
 mod scandirs;
 mod shows;
 
-pub use movies::update_movie;
+pub use movies::scan_movie_dir;
 pub use scandirs::{scan_directory, scan_directories};
-pub use shows::{build_show, build_shows};
+pub use shows::build_show;
 pub use nfo::Nfo;
 
 // Helper macro.

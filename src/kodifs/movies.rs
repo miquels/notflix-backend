@@ -7,7 +7,7 @@ use crate::models::{FileInfo, Movie, Thumb};
 use crate::util::SystemTimeToUnixTime;
 use super::*;
 
-pub async fn update_movie(coll: &Collection, dirname: &str, dbent: &Movie, only_nfo: bool) -> Option<Movie> {
+pub async fn scan_movie_dir(coll: &Collection, dirname: &str, dbent: &Movie, only_nfo: bool) -> Option<Movie> {
 
     // First get all directory entries.
     let mut dirpath = PathBuf::from(&coll.directory);

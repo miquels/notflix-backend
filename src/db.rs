@@ -36,52 +36,44 @@ impl Db {
 
         // If not found, read the NFO file to get the uniqueids, and search for that.
         if oldmovie.id == 0 {
-            // println!("movie not found by dirname"); 
-            if let Some(mv) = kodifs::update_movie(coll, name, &oldmovie, true).await {
-                // println!("succeeded in reading nfo: {:?}", mv.nfo_base.uniqueids);
+            if let Some(mv) = kodifs::scan_movie_dir(coll, name, &oldmovie, true).await {
                 let by = FindItemBy::uniqueids(&mv.nfo_base.uniqueids);
-                if let Some(id) = self.lookup(&by).await {
-                    // println!("found existing movie via uniqueids: {id}");
-                    let by = FindItemBy::id(id);
-                    if let Some(oldmv) = Movie::lookup_by(self, &by).await {
-                        // println!("Found oldmovie in database");
-                        oldmovie = oldmv;
-                        oldmovie.directory = mv.directory.clone();
-                        oldmovie.lastmodified = 1;
-                    } else {
-                        // println!("movie not in database, but re-using id");
-                        oldmovie.id = id;
-                    }
+                if let Some(oldmv) = Movie::lookup_by(self, &by).await {
+                    oldmovie = oldmv;
+                    oldmovie.directory = mv.directory.clone();
+                    oldmovie.lastmodified = 1;
+                } else {
+                  if let Some(id) = self.lookup(&by).await {
+                      oldmovie.id = id;
+                  }
                 }
             }
         }
 
         // Now scan the movie directory.
-        let mut movie = match kodifs::update_movie(coll, name, &oldmovie, false).await {
+        let mut movie = match kodifs::scan_movie_dir(coll, name, &oldmovie, false).await {
             Some(mv) => mv,
-            None => bail!("failed to scan directory {}", name),
+            None => bail!("db::update_movie: failed to scan directory {}", name),
         };
 
         // insert or update?
         if oldmovie.id == 0 {
-            // println!("INSERT movie");
             // No ID yet, so it doesn't exist in the database.
             movie.insert(self).await
                 .with_context(|| format!("failed to insert db for {}", name))?;
-            let uids = UniqueIds::new(movie.id);
-            uids.update(self, &movie.nfo_base.uniqueids).await?;
         } else if movie.lastmodified > oldmovie.lastmodified && oldmovie.lastmodified != 0 {
-            // println!("UPDATE movie");
             // There was an update, so update the database.
             movie.update(self).await
                 .with_context(|| format!("failed to update db for {}", name))?;
-            let uids = UniqueIds::new(movie.id);
-            uids.update(self, &movie.nfo_base.uniqueids).await?;
         }
+
+        let uids = UniqueIds::new(movie.id);
+        uids.update(self, &movie.nfo_base.uniqueids).await?;
 
         Ok(())
     }
 
+    // Lookup a movie or tvshow in the database and return it's ID.
     pub async fn lookup(&self, by: &FindItemBy<'_>) -> Option<i64> {
         let id = sqlx::query!(
             r#"
