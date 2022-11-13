@@ -397,25 +397,37 @@ impl Nfo {
     }
 
     pub fn update_movie(&self, item: &mut models::Movie) {
+        let title = item.nfo_base.title.take();
         item.nfo_base = self.to_nfo_base();
         item.nfo_movie = self.to_nfo_movie();
         item.runtime = self.runtime.clone();
+        if item.nfo_base.title.is_none() {
+            item.nfo_base.title = title;
+        }
     }
 
     pub fn update_tvshow(&self, item: &mut models::TVShow) {
+        let title = item.nfo_base.title.take();
         item.nfo_base = self.to_nfo_base();
         item.nfo_movie = self.to_nfo_movie();
         item.total_seasons = self.season.clone();
         item.total_episodes = self.episode.clone();
         item.status = self.status.clone();
+        if item.nfo_base.title.is_none() {
+            item.nfo_base.title = title;
+        }
     }
 
     pub fn update_episode(&self, item: &mut models::Episode) {
+        let title = item.nfo_base.title.take();
         item.nfo_base = self.to_nfo_base();
         item.runtime = self.runtime.clone();
         item.aired = self.status.clone();
         item.displayseason = self.displayseason.clone();
         item.displayepisode = self.displayepisode.clone();
+        if item.nfo_base.title.is_none() {
+            item.nfo_base.title = title;
+        }
     }
 }
 

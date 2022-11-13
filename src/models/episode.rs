@@ -17,6 +17,8 @@ pub struct Episode {
     pub tvshow_id: i64,
     #[serde(skip_serializing)]
     pub directory: sqlx::types::Json<FileInfo>,
+    #[serde(skip_serializing)]
+    pub deleted: bool,
     #[serde(skip)]
     pub lastmodified: i64,
     #[serde(skip_serializing_if = "is_default")]
@@ -61,6 +63,7 @@ impl Episode {
                 SELECT i.id AS "id: i64",
                        i.collection_id AS "collection_id: i64",
                        i.directory AS "directory!: J<FileInfo>",
+                       i.deleted AS "deleted!: bool",
                        i.lastmodified,
                        i.dateadded,
                        i.nfofile AS "nfofile?: J<FileInfo>",
@@ -97,13 +100,22 @@ impl Episode {
         let mut episodes = Vec::new();
         while let Some(row) = rows.try_next().await.ok().flatten() {
             let ep = build_struct!(Episode, row,
-                id, collection_id, directory, lastmodified, dateadded, nfofile, thumbs,
+                id, collection_id, directory, deleted, lastmodified, dateadded, nfofile, thumbs,
                 nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.ratings,
                 nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
                 tvshow_id, video, season, episode, aired, runtime, displayseason, displayepisode)?;
             episodes.push(ep);
         }
         Some(episodes)
+    }
+
+    pub fn copy_nfo_from(&mut self, other: &Episode) {
+        self.nfofile = other.nfofile.clone();
+        self.nfo_base = other.nfo_base.clone();
+        self.aired = other.aired.clone();
+        self.runtime = other.runtime.clone();
+        self.displayseason = other.displayseason;
+        self.displayepisode = other.displayepisode;
     }
 
     pub async fn insert(&mut self, db: &Db) -> Result<()> {

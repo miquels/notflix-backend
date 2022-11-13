@@ -5,7 +5,7 @@ PRAGMA foreign_keys = ON;
 -- * unless this collection is empty (no items), then delete it.
 -- if at startup this section in the config is not in the database, insert it.
 CREATE TABLE collections(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id INTEGER PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   type VARCHAR(16) NOT NULL,
   directory TEXT NOT NULL
@@ -14,6 +14,7 @@ CREATE TABLE collections(
 -- This is the base table for movies, tvshows, season, episodes.
 -- It contains info generic for any media type.
 CREATE TABLE mediaitems (
+  -- AUTOINCREMENT is important, we should not re-use mediaitems.id.
   id integer PRIMARY KEY AUTOINCREMENT,
   collection_id INTEGER NOT NULL,
   -- unix timestamp of anything contained in this item.
@@ -40,7 +41,7 @@ CREATE TABLE mediaitems (
 );
 
 CREATE TABLE movies(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id INTEGER PRIMARY KEY,
   mediaitem_id INTEGER NOT NULL,
 
   -- common to movies and tvshows
@@ -60,7 +61,7 @@ CREATE TABLE movies(
 );
 
 CREATE TABLE tvshows(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id INTEGER PRIMARY KEY,
   mediaitem_id INTEGER NOT NULL,
 
   -- common to movies and tvshows
@@ -81,7 +82,7 @@ CREATE TABLE tvshows(
 );
 
 CREATE TABLE episodes(
-  id INTEGER PRIMARY KEY NOT NULL,
+  id INTEGER PRIMARY,
   mediaitem_id INTEGER NOT NULL,
   tvshow_id INTEGER NOT NULL,
 
@@ -100,7 +101,7 @@ CREATE TABLE episodes(
 );
 
 CREATE TABLE images(
-  id INTEGER PRIMARY KEY NOT NULL,
+  id INTEGER PRIMARY KEY,
   mediaitem_id INTEGER NOT NULL,
 
   -- non-unique id (resized images have the same id).
@@ -124,7 +125,7 @@ CREATE TABLE images(
 CREATE INDEX idx_images_image_id ON images(image_id);
 
 CREATE TABLE uniqueids(
-  id INTEGER PRIMARY KEY NOT NULL,
+  id INTEGER PRIMARY KEY,
   mediaitem_id INTEGER NOT NULL,
 
   -- type is imdb, or tvdb, etc
@@ -140,7 +141,7 @@ CREATE TABLE uniqueids(
 CREATE UNIQUE INDEX uniqueids_idx ON uniqueids(idtype, uniqueid);
 
 CREATE TABLE actors_in_item(
-  id INTEGER PRIMARY KEY NOT NULL,
+  id INTEGER PRIMARY,
   mediaitem_id INTEGER NOT NULL,
 
   name TEXT NOT NULL,

@@ -45,6 +45,15 @@ pub struct TVShow {
 }
 
 impl TVShow {
+    pub fn copy_nfo_from(&mut self, other: &TVShow) {
+        self.nfofile = other.nfofile.clone();
+        self.nfo_base = other.nfo_base.clone();
+        self.nfo_movie = other.nfo_movie.clone();
+        self.total_seasons = other.total_seasons;
+        self.total_episodes = other.total_episodes;
+        self.status = other.status.clone();
+    }
+
     pub async fn select_one(dbh: &DbHandle, id: i64) -> Option<TVShow> {
         let r = sqlx::query!(
             r#"
