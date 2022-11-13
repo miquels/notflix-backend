@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use tokio::fs;
 
 use crate::collections::Collection;
-use crate::models::{TVShow, Season, Thumb, Episode, FileInfo};
+use crate::models::{self, TVShow, Season, FileInfo};
 use super::*;
 
 pub async fn build_show(coll: &Collection, name: &str) -> Option<TVShow> {
@@ -21,8 +21,8 @@ struct EpMap {
 pub struct Show {
     ep_map:  HashMap<String, EpMap>,
     db_ep_map:  HashMap<String, EpMap>,
-    basedir: String,
-    tvshow:  TVShow,
+    pub basedir: String,
+    pub tvshow:  TVShow,
     seasons: Vec<Season>,
 }
 
@@ -44,19 +44,19 @@ impl Show {
         self.seasons.len() - 1
     }
 
-    fn get_db_episode<'a>(&self, db_tvshow: &'a TVShow, basepath: &str) -> Option<&'a Episode> {
+    fn get_db_episode<'a>(&self, db_tvshow: &'a TVShow, basepath: &str) -> Option<&'a models::Episode> {
         self.db_ep_map.get(basepath).map(|em| {
             &db_tvshow.seasons[em.season_idx].episodes[em.episode_idx]
         })
     }
 
-    fn get_db_episode_mut<'a>(&self, db_tvshow: &'a mut TVShow, basepath: &str) -> Option<&'a mut Episode> {
+    pub fn get_db_episode_mut<'a>(&self, db_tvshow: &'a mut TVShow, basepath: &str) -> Option<&'a mut models::Episode> {
         self.db_ep_map.get(basepath).map(|em| {
             &mut db_tvshow.seasons[em.season_idx].episodes[em.episode_idx]
         })
     }
 
-    fn get_episode_mut(&mut self, season_idx: usize, episode_idx: usize) -> &mut Episode {
+    fn get_episode_mut(&mut self, season_idx: usize, episode_idx: usize) -> &mut models::Episode {
         &mut self.seasons[season_idx].episodes[episode_idx]
     }
 
@@ -217,10 +217,10 @@ impl Show {
             None => 0,
         };
 
-        let mut ep = Episode {
+        let mut ep = models::Episode {
             id,
             video,
-            ..Episode::default()
+            ..models::Episode::default()
         };
 
         // Add info from the filename.
@@ -406,23 +406,6 @@ impl Show {
         tvshow.seasons = seasons;
         Some(tvshow)
     }
-}
-
-fn add_thumb(thumbs: &mut sqlx::types::Json<Vec<Thumb>>, _dir: &str, name: impl Into<String>, aspect: &str, season: Option<&str>) {
-    let name = name.into();
-
-    let season = season.map(|mut s| {
-        while s.len() > 1 && s.starts_with("0") {
-            s = &s[1..];
-        }
-        s
-    });
-
-    thumbs.0.push(Thumb {
-        path: name,
-        aspect: aspect.to_string(),
-        season: season.map(|s| s.to_string()),
-    });
 }
 
 #[derive(Default, Debug)]
