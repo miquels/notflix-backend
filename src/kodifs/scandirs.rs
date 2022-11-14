@@ -55,3 +55,46 @@ pub async fn scan_directory(coll: &Collection, name: &str, subdirs: bool) -> io:
     }
     Ok(newest)
 }
+
+// Scan a directory recursively (max 1 subdir deep).
+// The files in 'names' will be sorted alphabetically.
+pub async fn read_dir(basedir: &str, subdirs: bool, names: &mut Vec<String>) {
+    do_read_dir(basedir, subdirs, None, names).await;
+    names.sort();
+}
+
+#[async_recursion::async_recursion]
+async fn do_read_dir<'a: 'async_recursion>(basedir: &str, subdirs: bool, subdir: Option<&'a str>, names: &mut Vec<String>) {
+
+    // Read the entire directory in one go.
+    let dir = match subdir {
+        Some(subdir) => format!("{}/{}", basedir, subdir),
+        None => basedir.to_string(),
+    };
+    let subdir = subdir.map(|s| format!("{}/", s));
+
+    let mut d = match fs::read_dir(&dir).await {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+
+    while let Ok(Some(entry)) = d.next_entry().await {
+        if let Ok(mut name) = entry.file_name().into_string() {
+            if name.starts_with(".") || name.starts_with("+ ") {
+                continue;
+            }
+            if let Ok(t) = entry.file_type().await {
+                if t.is_dir() {
+                    if subdirs {
+                        do_read_dir(basedir, false, Some(&name), names).await;
+                    }
+                    continue;
+                }
+            }
+            if let Some(s) = subdir.as_ref() {
+                name.insert_str(0, s);
+            }
+            names.push(name);
+        }
+    }
+}

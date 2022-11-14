@@ -26,6 +26,8 @@ pub struct Thumb {
     pub aspect:   String,
     #[serde(skip_serializing_if = "is_default")]
     pub season:  Option<String>,
+    #[serde(skip)]
+    pub state: ThumbState,
 }
 
 #[derive(Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
@@ -50,4 +52,12 @@ pub struct UniqueId {
     pub idtype: String,
     pub default: bool,
     pub id: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum ThumbState {
+    Deleted,
+    #[default]
+    Unchanged,
+    New,
 }

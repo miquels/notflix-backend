@@ -8,6 +8,8 @@ pub struct FileInfo {
     pub inode:  u64,
     pub size:   u64,
     pub modified: SystemTime,
+    #[serde(skip)]
+    pub fullpath: String,
 }
 
 impl std::default::Default for FileInfo {
@@ -17,6 +19,7 @@ impl std::default::Default for FileInfo {
             inode: 0,
             size: 0,
             modified: SystemTime::UNIX_EPOCH,
+            fullpath: String::new(),
         }
     }
 }
@@ -24,43 +27,29 @@ impl std::default::Default for FileInfo {
 use std::io;
 use tokio::fs::File;
 impl FileInfo {
-    pub fn join(mut basedir: &str, mut subdir: &str, path: &str) -> String {
-        let mut slash1 = "/";
-        let mut slash2 = "/";
-        if basedir == "" || basedir == "." || basedir == "./" {
-            basedir = "";
-            slash1 = "";
-        }
-        if subdir == "" || subdir == "." || subdir == "./" {
-            subdir = "";
-            slash2 = "";
-        }
-        [ basedir, slash1, subdir, slash2, path ].join("")
+    pub fn join(basedir: &str, path: &str) -> String {
+        format!("{}/{}", basedir, path)
     }
 
-    pub async fn from_path<'a, T>(basedir: &str, subdir: T, path: &str) -> io::Result<FileInfo>
-    where
-        T: Into<Option<&'a str>>
-    {
-        let subdir = subdir.into().unwrap_or("");
-        let m = tokio::fs::metadata(FileInfo::join(basedir, subdir, path)).await?;
+    pub async fn from_path(basedir: &str, path: &str) -> io::Result<FileInfo> {
+        let fullpath = FileInfo::join(basedir, path);
+        let m = tokio::fs::metadata(&fullpath).await?;
         Ok(FileInfo {
-            path: FileInfo::join("", subdir, path),
+            path: path.to_string(),
+            fullpath,
             inode: m.ino(),
             size: m.len(),
             modified: m.modified()?,
         })
     }
 
-    pub async fn open<'a, T>(basedir: &str, subdir: T, path: &str) -> io::Result<(File, FileInfo)>
-    where
-        T: Into<Option<&'a str>>
-    {
-        let subdir = subdir.into().unwrap_or("");
-        let f = File::open(FileInfo::join(basedir, subdir, path)).await?;
+    pub async fn open(basedir: &str, path: &str) -> io::Result<(File, FileInfo)> {
+        let fullpath = FileInfo::join(basedir, path);
+        let f = File::open(&fullpath).await?;
         let m = f.metadata().await?;
         Ok((f, FileInfo {
-            path: FileInfo::join("", subdir, path),
+            path: path.to_string(),
+            fullpath,
             inode: m.ino(),
             size: m.len(),
             modified: m.modified()?,

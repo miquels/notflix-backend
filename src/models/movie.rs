@@ -77,12 +77,20 @@ impl Movie {
                        m.video AS "video: J<FileInfo>"
                 FROM mediaitems i
                 JOIN movies m ON (m.mediaitem_id = i.id)
-                WHERE i.id = ? AND i.deleted = 0"#,
+                WHERE i.id = ? AND (i.deleted = 0 OR i.deleted = ?)"#,
             id,
+            find.deleted_too,
         )
         .fetch_one(&db.handle)
-        .await
-        .ok()?;
+        .await;
+
+        let r = match r {
+            Ok(r) => r,
+            Err(e) => {
+                log::error!("error getting movie by id {}: {}", id, e);
+                return None;
+            },
+        };
 
         build_struct!(Movie, r,
             id, collection_id, directory, lastmodified, dateadded, nfofile, thumbs,

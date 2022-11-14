@@ -4,7 +4,6 @@ use structopt::StructOpt;
 use notflix_backend::collections;
 use notflix_backend::config;
 use notflix_backend::db;
-use notflix_backend::models;
 use notflix_backend::kodifs;
 use notflix_backend::server;
 
@@ -111,6 +110,8 @@ pub struct ReadNfoOpts {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    env_logger::init();
+
     let opts = MainOpts::from_args();
     match opts.cmd {
         Command::Serve(opts) => return serve(opts).await,
@@ -157,8 +158,7 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
             let file_name = m.next().unwrap();
             coll.directory = m.next().unwrap_or(".").to_string();
 
-            let mv = models::Movie::default();
-            match kodifs::scan_movie_dir(&coll, file_name, &mv, false).await {
+            match kodifs::scan_movie_dir(&coll, file_name, None, false).await {
                 Some(item) => println!("{}", serde_json::to_string_pretty(&item)?),
                 None => println!("no movie found"),
             }

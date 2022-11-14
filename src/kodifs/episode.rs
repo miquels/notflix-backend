@@ -1,10 +1,9 @@
-use crate::models::{self, TVShow, FileInfo};
-use super::shows::Show;
+use crate::models::{self, FileInfo};
 use super::*;
 
 #[derive(Default, Debug)]
 pub struct Episode {
-    pub basedir: String,
+    pub showdir: String,
     pub basepath: String,
     pub files:   Vec<String>,
     pub episode: models::Episode,
@@ -12,43 +11,29 @@ pub struct Episode {
 
 impl Episode {
 
-    pub async fn new(show: &mut Show, name: &str, db_tvshow: &mut TVShow) -> Option<Episode> {
-
-        // Parse the name, see if it's a video, extract information.
-        let caps = IS_VIDEO.captures(name);
-        let (basepath, hint, basename, _ext) = match caps.as_ref() {
-            Some(caps) => (&caps[1], &caps[2], &caps[3], &caps[4]),
-            None => return None,
-        };
-        let season_hint = hint.parse::<u32>().ok();
+    pub async fn new(showdir: String, name: &str, basepath: &str, season_hint: Option<u32>, db_episode: Option<&mut models::Episode>) -> Option<Episode> {
 
         // Parse the episode filename for season and episode number etc.
-        let ep_info = match EpisodeNameInfo::parse(basename, season_hint) {
+        let ep_info = match EpisodeNameInfo::parse(basepath, season_hint) {
             Some(ep_info) => ep_info,
             None => return None,
         };
 
         // Must be able to open it.
-        let video = match FileInfo::from_path(&show.basedir, None, name).await {
+        let video = match FileInfo::from_path(&showdir, name).await {
             Ok(v) => sqlx::types::Json(v),
             Err(_) => return None,
         };
 
-        // If this episode was already in the database, copy its ID.
-        // We also _un_mark it as deleted.
-        let id = match show.get_db_episode_mut(db_tvshow, basepath) {
-            Some(ep) => {
-                ep.deleted = false;
-                ep.id
-            },
-            None => 0,
-        };
-
-        let mut episode = models::Episode {
-            id,
-            video,
-            ..models::Episode::default()
-        };
+        let mut episode = models::Episode::default();
+        if let Some(db_episode) = db_episode {
+            std::mem::swap(&mut episode, db_episode);
+            db_episode.id = 0;
+            db_episode.deleted = true;
+            episode.deleted = false;
+        }
+        episode.video = video;
+        // TODO XXX episode.modified(Some(&video.modified));
 
         // Add info from the filename.
         episode.nfo_base.title = Some(ep_info.name);
@@ -57,24 +42,24 @@ impl Episode {
         // XXX TODO episode.double = ep_info.double;
 
         Some(Episode {
-            basedir: show.basedir.clone(),
+            showdir,
             basepath: basepath.to_string(),
             files: Vec::new(),
             episode,
         })
     }
 
-    pub async fn finalize(mut self, db_episode: Option<&models::Episode>) -> models::Episode {
+    pub async fn finalize(mut self) -> models::Episode {
         let mut files = std::mem::replace(&mut self.files, Vec::new());
         for name in files.drain(..) {
-            self.add_related_file(name, db_episode).await;
+            self.add_related_file(name).await;
         }
         self.episode
     }
 
     // See if this is a file that is related to an episode, by
     // indexing on the basepath.
-    async fn add_related_file(&mut self, name: String, db_episode: Option<&models::Episode>) {
+    async fn add_related_file(&mut self, name: String) {
 
         let caps = IS_RELATED.captures(&name);
         let (aux, ext) = match caps.as_ref() {
@@ -116,16 +101,13 @@ impl Episode {
         */
 
         if ext == "nfo" {
-            match FileInfo::open(&self.basedir, None, &name).await {
+            match FileInfo::open(&self.showdir, &name).await {
                 Ok((mut file, nfofile)) => {
-                    let mut nfofile = Some(sqlx::types::Json(nfofile));
 
-                    if let Some(db_ep) = db_episode {
-                        if db_ep.nfofile == nfofile {
-                            // No change, so we can copy the data.
-                            self.episode.copy_nfo_from(db_ep);
-                            nfofile = None;
-                        }
+                    let mut nfofile = Some(sqlx::types::Json(nfofile));
+                    if self.episode.nfofile == nfofile {
+                        // No change.
+                        nfofile = None;
                     }
 
                     if nfofile.is_some() {
@@ -161,6 +143,7 @@ impl EpisodeNameInfo {
 
     pub fn parse(name: &str, season_hint: Option<u32>) -> Option<EpisodeNameInfo> {
         let mut ep = EpisodeNameInfo::default();
+        let name = name.split('/').last().unwrap();
 
         // pattern: ___.s03e04.___ or ___.s03.e04.___
         const PAT1: &'static str = r#"^.*[ ._][sS]([0-9]+)\.?[eE]([0-9]+)[ ._].*$"#;

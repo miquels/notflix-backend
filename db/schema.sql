@@ -82,7 +82,7 @@ CREATE TABLE tvshows(
 );
 
 CREATE TABLE episodes(
-  id INTEGER PRIMARY,
+  id INTEGER PRIMARY KEY,
   mediaitem_id INTEGER NOT NULL,
   tvshow_id INTEGER NOT NULL,
 
@@ -141,7 +141,7 @@ CREATE TABLE uniqueids(
 CREATE UNIQUE INDEX uniqueids_idx ON uniqueids(idtype, uniqueid);
 
 CREATE TABLE actors_in_item(
-  id INTEGER PRIMARY,
+  id INTEGER PRIMARY KEY,
   mediaitem_id INTEGER NOT NULL,
 
   name TEXT NOT NULL,

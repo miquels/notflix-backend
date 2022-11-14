@@ -398,11 +398,15 @@ impl Nfo {
 
     pub fn update_movie(&self, item: &mut models::Movie) {
         let title = item.nfo_base.title.take();
+        let premiered = item.nfo_movie.premiered.take();
         item.nfo_base = self.to_nfo_base();
         item.nfo_movie = self.to_nfo_movie();
         item.runtime = self.runtime.clone();
         if item.nfo_base.title.is_none() {
             item.nfo_base.title = title;
+        }
+        if item.nfo_movie.premiered.is_none() {
+            item.nfo_movie.premiered = premiered;
         }
     }
 

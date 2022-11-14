@@ -1,25 +1,18 @@
-use std::path::PathBuf;
-
-use tokio::fs;
+use std::time::SystemTime;
 
 use crate::collections::*;
-use crate::models::{FileInfo, Movie, Thumb};
+use crate::models::{FileInfo, Movie};
 use crate::util::SystemTimeToUnixTime;
 use super::*;
 
-pub async fn scan_movie_dir(coll: &Collection, dirname: &str, dbent: &Movie, only_nfo: bool) -> Option<Movie> {
+pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<Movie>, only_nfo: bool) -> Option<Movie> {
 
     // First get all directory entries.
-    let mut dirpath = PathBuf::from(&coll.directory);
-    dirpath.push(dirname);
-    let dirpath = dirpath.to_str().unwrap().to_string();
-    let dirinfo = FileInfo::from_path(&dirpath, None, "").await.ok()?;
-
+    dirname = dirname.trim_end_matches('/');
+    let dirinfo = FileInfo::from_path(&coll.directory, dirname).await.ok()?;
+    let dirpath = dirinfo.fullpath.clone();
     let mut entries = Vec::new();
-    let mut d = fs::read_dir(&dirpath).await.ok()?;
-    while let Ok(Some(entry)) = d.next_entry().await {
-        entries.push(entry);
-    }
+    scandirs::read_dir(&dirpath, false, &mut entries).await;
 
     // Collect timestamps.
     let mut added_ts = Vec::new();
@@ -30,119 +23,93 @@ pub async fn scan_movie_dir(coll: &Collection, dirname: &str, dbent: &Movie, onl
 
     // Loop over all directory entries. We need to find a video file.
     // If we don't, skip the entire directory.
-    let mut base = String::new();
+    let mut basepath = String::new();
     let mut video = None;
-    for entry in &entries {
-        let file_name = entry.file_name();
-        let file_name = match file_name.to_str() {
-            Some(name) => name,
-            None => continue,
-        };
-        let caps = match IS_VIDEO.captures(file_name) {
+    for name in &entries {
+        let caps = match IS_VIDEO.captures(name) {
             Some(caps) => caps,
             None => continue,
         };
-        video = match FileInfo::from_path(&dirpath, None, file_name).await {
+        video = match FileInfo::from_path(&dirpath, name).await {
             Ok(v) => Some(v),
             Err(_) => continue,
         };
-        base = caps[1].to_string();
+        basepath = caps[1].to_string();
         break;
     }
     let video = video?;
     added_ts.push(video.modified);
-
-    // If the directory name ends with <space>(YYYY) then it's a year.
-    // Remember that year as backup in case there's no NFO file.
-    let (title, year) = match IS_YEAR.captures(dirname) {
-        Some(caps) => (Some(caps[1].to_string()), Some(caps[2].parse::<u32>().unwrap())),
-        None => (Some(dirname.to_string()), None),
-    };
 
     // `added_ts` contains a list of dates, use the oldest as `added`.
     added_ts.sort();
     // let added = (added_ts.len() > 0).then(|| DateTime<offset::Utc>::from(added_ts[0]));
 
     // Initial Movie.
-    let mut movie = Movie {
-        id: dbent.id,
+    let mut movie = dbent.unwrap_or_else(|| Movie {
         lastmodified: video.modified.unixtime_ms(),
         collection_id: coll.collection_id as i64,
-        directory: sqlx::types::Json(dirinfo),
-        // XXX TODO dateadded: DateTime::offset::Utc::from(created),
         ..Movie::default()
+    });
+
+    // If the directory name changed, we need to update the db.
+    if movie.directory.path != dirname {
+        if movie.directory.path != "" {
+            log::debug!("Movie::scan_movie_dir: directory rename {} -> {}", movie.directory.path, dirname);
+        }
+        movie.lastmodified = SystemTime::now().unixtime_ms();
+        movie.directory = sqlx::types::Json(dirinfo);
+    }
+
+    // If the directory name ends with <space>(YYYY) then it's a year.
+    // Remember that year as backup in case there's no NFO file.
+    let (title, year) = match IS_YEAR.captures(dirname) {
+        Some(caps) => (Some(caps[1].trim().to_string()), caps[2].parse::<u32>().ok()),
+        None => (Some(dirname.to_string()), None),
     };
+    movie.nfo_base.title = title;
+    if let Some(year) = year {
+        movie.nfo_movie.premiered = Some(format!("{}-01-01", year));
+    }
 
     // Loop over all directory entries.
-    for entry in &entries {
-        let file_name = entry.file_name();
-        let name = match file_name.to_str() {
-            Some(name) => name,
-            None => continue,
+    for name in &entries {
+
+        let mut i = name.split('/').last().unwrap().rsplitn(2, '.');
+        let (base, ext) = match (i.next(), i.next()) {
+            (Some(ext), Some(base)) => (base, ext),
+            _ => continue,
         };
 
-        let mut aux = String::new();
-        let mut ext = String::new();
-
-        // poster.jpg
-        match IS_EXT1.captures(name) {
-            Some(caps) => {
-                ext = caps[2].to_string();
-                if &caps[1] != base {
-                    aux = caps[1].to_string();
-                    if let Some(caps) = IS_EXT2.captures(name) {
-                        if &caps[1] == base {
-                            aux = caps[2].to_string();
-                            ext = caps[3].to_string();
-                        }
-                    }
+        let mut aux = "";
+        if let Some(suffix) = name.strip_prefix(&basepath) {
+            if suffix.len() > ext.len() + 2 {
+                if suffix.starts_with(".") || suffix.starts_with("-") {
+                    aux = suffix[1..].strip_suffix(ext).unwrap();
+                    aux = &aux[..aux.len() - 1];
                 }
-            },
-            None => {
-                // big.bucks.bunny-poster.jpg
-                if let Some(caps) = IS_EXT2.captures(name) {
-                    if &caps[1] == base {
-                        aux = caps[2].to_string();
-                        ext = caps[3].to_string();
-                    }
-                }
-            },
-        }
-
-        if ext == "" {
-            continue;
+            }
         }
 
         // NFO file found. Parse it.
         if ext == "nfo" {
-            let (mut file, fileinfo) = match FileInfo::open(&dirpath, None, name).await {
-                Ok(f) => f,
+            let (mut file, nfofile) = match FileInfo::open(&dirpath, name).await {
+                Ok((file, fileinfo)) => (file, Some(sqlx::types::Json(fileinfo))),
                 Err(_) => continue,
             };
 
-            // Same? Just copy it.
-            let dbent_nfofile = dbent.nfofile.as_ref().map(|f| &f.0);
-            if dbent_nfofile == Some(&fileinfo) {
-               movie.nfo_base = dbent.nfo_base.clone();
-               movie.nfo_movie = dbent.nfo_movie.clone();
-               movie.nfofile = dbent.nfofile.clone();
-               continue;
+            if movie.nfofile == nfofile {
+                // No change, nothing to do!
+                continue;
             }
 
             match super::Nfo::read(&mut file).await {
                 Ok(nfo) => {
                     nfo.update_movie(&mut movie);
-                    if movie.nfo_base.title.is_none() && title.is_some() {
-                        movie.nfo_base.title = title.clone();
-                    }
-                    if movie.nfo_movie.premiered.is_none() && year.is_some() {
-                        movie.nfo_movie.premiered = Some(format!("{}-01-01", year.unwrap()));
-                    }
-                    let m = fileinfo.modified.unixtime_ms();
+                    let m = nfofile.as_ref().unwrap().modified.unixtime_ms();
                     if m > movie.lastmodified {
                         movie.lastmodified = m;
                     }
-                    movie.nfofile = Some(sqlx::types::Json(fileinfo));
+                    movie.nfofile = nfofile;
                 },
                 Err(e) => {
                     println!("error reading nfo: {}", e);
@@ -158,9 +125,12 @@ pub async fn scan_movie_dir(coll: &Collection, dirname: &str, dbent: &Movie, onl
         // Image: banner, fanart, folder, poster etc
         if IS_IMAGE.is_match(name) {
             if ext == "tbn" && aux == "" {
-                    aux = "poster".to_string();
+                    aux = "poster";
             }
-            let aspect = match aux.as_str() {
+            if aux == "" {
+                aux = base;
+            }
+            let aspect = match aux {
                 "banner" |
                 "fanart" |
                 "poster" |
@@ -169,12 +139,10 @@ pub async fn scan_movie_dir(coll: &Collection, dirname: &str, dbent: &Movie, onl
                 "clearlogo" => aux,
                 _ => continue,
             };
-            movie.thumbs.push(Thumb {
-                path: name.to_string(),
-                aspect: aspect.to_string(),
-                season: None,
-            });
+            add_thumb(&mut movie.thumbs, "", name, aspect, None);
         }
+
+        // XXX TODO: subtitles srt/vtt
     }
 
     Some(movie)
