@@ -15,7 +15,6 @@ pub mod scandirs;
 pub use movie::scan_movie_dir;
 pub use tvshow::scan_tvshow_dir;
 pub use nfo::Nfo;
-pub use episode::Episode;
 
 #[async_trait]
 pub trait KodiFS {

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 use crate::collections::Collection;
 use crate::models::{self, TVShow, Season, FileInfo};
+use super::episode::Episode;
 use super::*;
 
 pub async fn scan_tvshow_dir(coll: &Collection, name: &str, db_tvshow: Option<Box<TVShow>>, nfo_only: bool) -> Option<Box<TVShow>> {
