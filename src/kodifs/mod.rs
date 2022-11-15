@@ -20,7 +20,6 @@ pub use episode::Episode;
 #[async_trait]
 pub trait KodiFS {
     async fn scan_directory(coll: &Collection, name: &str, db_item: Option<Box<Self>>, only_nfo: bool) -> Option<Box<Self>>;
-    async fn id(&self) -> i64;
 }
 
 #[async_trait]
@@ -29,9 +28,6 @@ impl KodiFS for models::TVShow {
         let item = scan_tvshow_dir(coll, name, db_item, only_nfo).await?;
         Some(item)
     }
-    async fn id(&self) -> i64 {
-        self.id
-    }
 }
 
 #[async_trait]
@@ -39,9 +35,6 @@ impl KodiFS for models::Movie {
     async fn scan_directory(coll: &Collection, name: &str, db_item: Option<Box<Self>>, only_nfo: bool) -> Option<Box<Self>> {
         let item = scan_movie_dir(coll, name, db_item, only_nfo).await?;
         Some(item)
-    }
-    async fn id(&self) -> i64 {
-        self.id
     }
 }
 

@@ -6,6 +6,7 @@ use notflix_backend::config;
 use notflix_backend::db;
 use notflix_backend::kodifs;
 use notflix_backend::server;
+use notflix_backend::models::Movie;
 
 #[derive(StructOpt, Debug)]
 #[structopt(setting = clap::AppSettings::VersionlessSubcommands)]
@@ -211,7 +212,7 @@ async fn update(opts: UpdateOpts) -> anyhow::Result<()> {
             coll.collection_id = 1;
 
             let mut txn = db.handle.begin().await?;
-            db.update_movie(&coll, file_name, &mut txn).await?;
+            db.update_movie::<Movie>(&coll, file_name, &mut txn).await?;
             txn.commit().await?;
             println!("movie updated!");
         }

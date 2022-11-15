@@ -15,37 +15,91 @@ pub use misc::*;
 pub use nfo::{NfoBase, NfoMovie};
 
 use async_trait::async_trait;
-use crate::db::Db;
+
+use crate::db;
+use crate::util::SystemTimeToUnixTime;
 
 #[async_trait]
 pub trait MediaItem {
-    async fn insert(&mut self, db: &Db) -> anyhow::Result<()>;
-    async fn update(&self, db: &Db) -> anyhow::Result<()>;
+    fn id(&self) -> i64;
+    fn set_id(&mut self, id: i64);
+    fn uniqueids(&self) -> &'_ [UniqueId];
+    fn lastmodified(&self) -> i64;
+    fn nfo_lastmodified(&self) -> Option<i64>;
+    async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &db::FindItemBy<'_>) -> Option<Box<Self>>;
+    async fn insert(&mut self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()>;
+    async fn update(&self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()>;
 }
 
-/*
 #[async_trait]
 impl MediaItem for Movie {
-    async fn insert(&mut self, db: &Db) -> anyhow::Result<()> {
-        self.insert(db).await
+    fn id(&self) -> i64 {
+        self.id
     }
 
-    async fn update(&self, db: &Db) -> anyhow::Result<()> {
-        self.update(db).await
+    fn set_id(&mut self, id: i64) {
+        self.id = id;
+    }
+
+    fn uniqueids(&self) -> &'_ [UniqueId] {
+        self.nfo_base.uniqueids.0.as_ref()
+    }
+
+    fn lastmodified(&self) -> i64 {
+        self.lastmodified
+    }
+
+    fn nfo_lastmodified(&self) -> Option<i64> {
+        self.nfofile.as_ref().map(|m| m.modified.unixtime_ms())
+    }
+
+    async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &db::FindItemBy<'_>) -> Option<Box<Self>> {
+        Self::lookup_by(dbh, find).await
+    }
+
+    async fn insert(&mut self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()> {
+        self.insert(txn).await
+    }
+
+    async fn update(&self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()> {
+        self.update(txn).await
     }
 }
 
 #[async_trait]
 impl MediaItem for TVShow {
-    async fn insert(&mut self, db: &Db) -> anyhow::Result<()> {
-        self.insert(db).await
+    fn id(&self) -> i64 {
+        self.id
     }
 
-    async fn update(&self, db: &Db) -> anyhow::Result<()> {
-        self.update(db).await
+    fn set_id(&mut self, id: i64) {
+        self.id = id;
+    }
+
+    fn uniqueids(&self) -> &'_ [UniqueId] {
+        self.nfo_base.uniqueids.0.as_ref()
+    }
+
+    fn lastmodified(&self) -> i64 {
+        self.lastmodified
+    }
+
+    fn nfo_lastmodified(&self) -> Option<i64> {
+        self.nfofile.as_ref().map(|m| m.modified.unixtime_ms())
+    }
+
+    async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &db::FindItemBy<'_>) -> Option<Box<Self>> {
+        Self::lookup_by(dbh, find).await
+    }
+
+    async fn insert(&mut self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()> {
+        self.insert(txn).await
+    }
+
+    async fn update(&self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()> {
+        self.update(txn).await
     }
 }
-*/
 
 type J<T> = sqlx::types::Json<T>;
 type JV<T> = sqlx::types::Json<Vec<T>>;
