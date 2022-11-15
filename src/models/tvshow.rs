@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde::Serialize;
-use crate::db::Db;
+use crate::db;
 use super::nfo::build_struct;
 use super::{Actor, Rating, Thumb, UniqueId};
 use super::{Episode, NfoBase, NfoMovie, FileInfo, J, JV, is_default};
@@ -54,7 +54,7 @@ impl TVShow {
         self.status = other.status.clone();
     }
 
-    pub async fn select_one(db: &Db, id: i64) -> Option<TVShow> {
+    pub async fn select_one(dbh: &mut db::TxnHandle<'_>, id: i64) -> Option<TVShow> {
         let r = sqlx::query!(
             r#"
                 SELECT i.id AS "id: i64",
@@ -85,7 +85,7 @@ impl TVShow {
                 WHERE i.id = ? AND i.deleted = 0"#,
             id,
         )
-        .fetch_one(&db.handle)
+        .fetch_one(dbh)
         .await
         .ok()?;
         build_struct!(TVShow, r,
@@ -97,7 +97,7 @@ impl TVShow {
             total_seasons, total_episodes, status)
     }
 
-    pub async fn insert(&mut self, db: &Db) -> Result<()> {
+    pub async fn insert(&mut self, txn: &mut db::TxnHandle<'_>) -> Result<()> {
         self.id = sqlx::query!(
             r#"
                 INSERT INTO mediaitems(
@@ -132,7 +132,7 @@ impl TVShow {
             self.nfo_base.credits,
             self.nfo_base.directors,
         )
-        .execute(&db.handle)
+        .execute(&mut *txn)
         .await?
         .last_insert_rowid();
 
@@ -163,13 +163,13 @@ impl TVShow {
             self.total_episodes,
             self.status
         )
-        .execute(&db.handle)
+        .execute(&mut *txn)
         .await?;
 
         Ok(())
     }
 
-    pub async fn update(&self, db: &Db) -> Result<()> {
+    pub async fn update(&self,  txn: &mut db::TxnHandle<'_>) -> Result<()> {
         sqlx::query!(
             r#"
                 UPDATE mediaitems SET
@@ -204,7 +204,7 @@ impl TVShow {
             self.nfo_base.directors,
             self.id
         )
-        .execute(&db.handle)
+        .execute(&mut *txn)
         .await?;
 
         sqlx::query!(
@@ -233,7 +233,7 @@ impl TVShow {
             self.status,
             self.id
         )
-        .execute(&db.handle)
+        .execute(&mut *txn)
         .await?;
 
         Ok(())

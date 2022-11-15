@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::db::Db;
+use crate::db;
 use crate::models::UniqueId;
 
 #[derive(Clone, Default, Debug, PartialEq)]
@@ -17,7 +17,7 @@ impl UniqueIds {
         }
     }
 
-    pub async fn get_mediaitem_id(db: &Db, uids: &[UniqueId]) -> Option<i64> {
+    pub async fn get_mediaitem_id(dbh: &mut db::TxnHandle<'_>, uids: &[UniqueId]) -> Option<i64> {
 
         if uids.len() == 0 {
             return None;
@@ -48,7 +48,7 @@ impl UniqueIds {
 
         // And execute it.
         let rows = query
-            .fetch_all(&db.handle)
+            .fetch_all(dbh)
             .await
             .ok()?;
 
@@ -60,7 +60,7 @@ impl UniqueIds {
         Some(rows[0].0)
     }
 
-    pub async fn update(&self, db: &Db, uids: &[UniqueId]) -> Result<()> {
+    pub async fn update(&self, txn: &mut db::TxnHandle<'_>, uids: &[UniqueId]) -> Result<()> {
 
         // XXX TODO could probably be smarter about this.
         for uid in uids {
@@ -78,7 +78,7 @@ impl UniqueIds {
                 uid.id,
                 uid.default
             )
-            .execute(&db.handle)
+            .execute(&mut *txn)
             .await?;
         }
 

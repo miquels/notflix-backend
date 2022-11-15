@@ -23,6 +23,7 @@ pub trait MediaItem {
     async fn update(&self, db: &Db) -> anyhow::Result<()>;
 }
 
+/*
 #[async_trait]
 impl MediaItem for Movie {
     async fn insert(&mut self, db: &Db) -> anyhow::Result<()> {
@@ -44,6 +45,7 @@ impl MediaItem for TVShow {
         self.update(db).await
     }
 }
+*/
 
 type J<T> = sqlx::types::Json<T>;
 type JV<T> = sqlx::types::Json<Vec<T>>;
@@ -56,4 +58,3 @@ where
 {
     *t == T::default()
 }
-

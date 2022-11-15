@@ -210,7 +210,9 @@ async fn update(opts: UpdateOpts) -> anyhow::Result<()> {
             coll.directory = m.next().unwrap_or(".").to_string();
             coll.collection_id = 1;
 
-            db.update_movie(&coll, file_name).await?;
+            let mut txn = db.handle.begin().await?;
+            db.update_movie(&coll, file_name, &mut txn).await?;
+            txn.commit().await?;
             println!("movie updated!");
         }
         if opts.movies {

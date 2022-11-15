@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::Serialize;
 use futures_util::TryStreamExt;
 
-use crate::db::Db;
+use crate::db;
 use super::nfo::build_struct;
 use super::{Rating, Thumb, UniqueId, Actor};
 use super::{J, JV, FileInfo, NfoBase, is_default};
@@ -52,12 +52,12 @@ pub struct Episode {
 }
 
 impl Episode {
-    pub async fn select_one(db: &Db, episode_id: i64) -> Option<Episode> {
-        let mut v = Episode::select(db, None, None, Some(episode_id)).await?;
+    pub async fn select_one(dbh: &mut db::TxnHandle<'_>, episode_id: i64) -> Option<Episode> {
+        let mut v = Episode::select(dbh, None, None, Some(episode_id)).await?;
         v.pop()
     }
 
-    pub async fn select(db: &Db, tvshow_id: Option<i64>, season_id: Option<i64>, episode_id: Option<i64>) -> Option<Vec<Episode>> {
+    pub async fn select(dbh: &mut db::TxnHandle<'_>, tvshow_id: Option<i64>, season_id: Option<i64>, episode_id: Option<i64>) -> Option<Vec<Episode>> {
         let mut rows = sqlx::query!(
             r#"
                 SELECT i.id AS "id: i64",
@@ -95,7 +95,7 @@ impl Episode {
                 episode_id,
                 episode_id
         )
-        .fetch(&db.handle);
+        .fetch(dbh);
 
         let mut episodes = Vec::new();
         while let Some(row) = rows.try_next().await.ok().flatten() {
@@ -118,7 +118,7 @@ impl Episode {
         self.displayepisode = other.displayepisode;
     }
 
-    pub async fn insert(&mut self, db: &Db) -> Result<()> {
+    pub async fn insert(&mut self, txn: &mut db::TxnHandle<'_>) -> Result<()> {
         self.id = sqlx::query!(
             r#"
                 INSERT INTO mediaitems(
@@ -153,7 +153,7 @@ impl Episode {
             self.nfo_base.credits,
             self.nfo_base.directors
         )
-        .execute(&db.handle)
+        .execute(&mut *txn)
         .await?
         .last_insert_rowid();
 
@@ -178,13 +178,13 @@ impl Episode {
             self.displayseason,
             self.displayepisode,
         )
-        .execute(&db.handle)
+        .execute(&mut *txn)
         .await?;
 
         Ok(())
     }
 
-    pub async fn update(&mut self, db: &Db) -> Result<()> {
+    pub async fn update(&mut self, txn: &mut db::TxnHandle<'_>) -> Result<()> {
         sqlx::query!(
             r#"
                 UPDATE mediaitems SET
@@ -219,7 +219,7 @@ impl Episode {
             self.nfo_base.directors,
             self.id
         )
-        .execute(&db.handle)
+        .execute(&mut *txn)
         .await?;
 
         sqlx::query!(
@@ -244,7 +244,7 @@ impl Episode {
             self.displayepisode,
             self.id
         )
-        .execute(&db.handle)
+        .execute(&mut *txn)
         .await?;
 
         Ok(())
