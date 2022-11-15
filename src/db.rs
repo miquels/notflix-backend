@@ -3,12 +3,15 @@
 /// This is where we put data scraped from the filesystem into
 /// the database.
 
+use std::collections::HashMap;
+use std::io::ErrorKind;
+
 use anyhow::{Context, Result};
 use sqlx::sqlite::SqlitePool;
 
 use crate::collections::Collection;
-use crate::models::{MediaItem, UniqueId, UniqueIds};
-use crate::kodifs::KodiFS;
+use crate::models::{Movie, TVShow, MediaItem, UniqueId, UniqueIds};
+use crate::kodifs::{KodiFS, scandirs};
 
 pub type DbHandle = SqlitePool;
 pub type TxnHandle<'a> = sqlx::Transaction<'a, sqlx::Sqlite>;
@@ -133,102 +136,122 @@ impl Db {
 
         Ok(())
     }
-/*
-    // Update a collection of movies.
-    pub async fn update_movie_collection(&self, coll: &Collection) -> Result<()> {
+
+    // Update a collection of movies / tvshows.
+    //
+    // Returns Ok if we can commit, error if not.
+    pub async fn update_collection(&self, coll: &Collection) -> Result<()> {
+        let r = async {
+            let mut txn = self.handle.begin().await?;
+
+            let res = match coll.type_.as_str() {
+                "movies" => self.do_update_collection::<Movie>(coll, &mut txn).await,
+                "tvseries" | "tvshows" => self.do_update_collection::<TVShow>(coll, &mut txn).await,
+                _ => anyhow::bail!("Db::update_collection({}): unknown type {}", coll.directory, coll.type_),
+            };
+            match res {
+                Ok(()) => Ok(txn.commit().await?),
+                Err(e) => {
+                    let _ = txn.rollback().await;
+                    return Err(e)?;
+                },
+            }
+        }.await.map_err(|e: anyhow::Error| e);
+
+        if let Err(e) = r {
+            log::error!("Db::update_collection({}): {}", coll.directory, e);
+            return Err(e)?;
+        }
+
+        Ok(())
+    }
+
+    async fn do_update_collection<M>(&self, coll: &Collection, txn: &mut TxnHandle<'_>) -> Result<()>
+    where
+        M: KodiFS,
+        M: MediaItem,
+        M: Default,
+    {
 
         // Get a list of directories from the filesystem.
-        let mut names = Vec::new();
-        let mut dirs = scandirs::read_dir(&coll.directory, false, &mut names).await;
+        let mut dirs = scandirs::scan_directories(coll, true).await;
         if dirs.len() == 0 {
-            log::error!("Db:update_movie_collection: empty dir: {}", coll.directory);
+            log::error!("Db:update_collection: empty dir: {}", coll.directory);
             return Ok(());
         }
 
         // Get a list of items from the database.
-        let items = sqlx::query!(
+        let mut items = sqlx::query!(
             r#"
-                SELECT id, json_extract(directory, '$.path') as directory, lastmodified
+                SELECT id, json_extract(directory, '$.path') AS "directory!: String", lastmodified
                 FROM mediaitems
                 WHERE collection_id = ?
                   AND deleted != 1"#,
                 coll.collection_id
         )
-        .fetch_all(&self.handle)
+        .fetch_all(&mut *txn)
         .await?;
-
-        enum State {
-            New,
-            Updated,
-            Deleted,
-        }
 
         // Put the items from the database in a HashMap
         let mut map = items
             .drain(..)
-            .map(|m| (m.directory, (m.id, m.lastmodified, State::New)))
-            .collect::<HashMap<_, _>>();
+            .map(|m| (m.directory, (m.id, m.lastmodified, false)))
+            .collect::<HashMap<String, _>>();
 
-        // For each directory on the filesystem.
-        for (dir, &mut d) in map.iter_mut() {
-            match scandirs::scan_directory(coll, dir, false) {
+        // For each item in the database.
+        for (dir, d) in map.iter_mut() {
+
+            // Remove from the list of filesystem directories.
+            dirs.remove(dir);
+
+            // Get the last modified stamp of the files in the directory.
+            match scandirs::scan_directory(coll, dir, false).await {
                 Ok(ts) => {
                     if ts <= d.1 {
                         // Not modified.
-                        d.2 = State::Updated,
+                        d.2 = true;
                         continue;
                     }
                 },
                 Err(e) => {
                     if e.kind() != ErrorKind::NotFound {
-                        d.2 = State::Deleted,
-                        log::error!("Db:update_movie_collection: {}: {}", dir, e);
+                        log::error!("Db:update_collection: {}: {}", dir, e);
                     }
                     continue;
                 }
             }
 
             // Ok, we have to do a full rescan of this movie.
-            match self.update_movie(coll, dir).await {
-                Ok(_) => {
-                    // successfully updated.
-                    d.2 = State::Updated;
-                },
-                Err(e) => {
-                    // got an error during updating. ignore it for now.
-                    log::error!("Db:update_movie_collection: {}: {}", dir, e);
-                    d.2 = State::Updated;
-                },
-            }
+            // self.update_movie will only return an error for SQL errors.
+            self.update_movie::<M>(coll, dir, &mut *txn).await?;
+
+            // successfully updated.
+            d.2 = true;
         }
 
-        // Now first loop over all the State::New entries.
-        for (dir, d) in map.iter() {
-            if d.2 == State::New {
-                if Err(e) = self.update_movie(coll, dir).await {
-                    log::error!("Db:update_movie_collection: {}: {}", dir, e);
-                }
-            }
+        // Now first loop over all the directories in the filesystem
+        // for which there was no database entry yet.
+        for dir in dirs.keys() {
+            self.update_movie::<M>(coll, dir, &mut *txn).await?;
+            map.remove(dir);
         }
 
         // Finally set the deleted flag on all State::Deleted entries.
-        for (dir, d) in map.iter() {
-            if d.2 == State::Deleted {
-                sqlx::query!(
-                    r#"
-                        UPDATE movies
-                        SET deleted = 1
-                        WHERE id = ?"#,
-                    d.3
-                )
-                .execute(&self.handle)
-                .await?;
-            }
+        for v in map.values().filter(|v| v.2 == false) {
+            sqlx::query!(
+                r#"
+                    UPDATE mediaitems
+                    SET deleted = 1
+                    WHERE id = ?"#,
+                v.0
+            )
+            .execute(&mut *txn)
+            .await?;
         }
 
         Ok(())
     }
-*/
+
     // Lookup a movie or tvshow in the database and return it's ID.
     pub async fn lookup(&self, by: &FindItemBy<'_>) -> Option<i64> {
         let mut txn = self.handle.begin().await.ok()?;
