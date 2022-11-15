@@ -6,14 +6,14 @@ use url::Url;
 use crate::models::{self, Thumb, ThumbState};
 use crate::collections::Collection;
 
-mod movies;
-mod nfo;
-mod shows;
+mod movie;
+mod tvshow;
 mod episode;
+mod nfo;
 pub mod scandirs;
 
-pub use movies::scan_movie_dir;
-pub use shows::scan_tvshow_dir;
+pub use movie::scan_movie_dir;
+pub use tvshow::scan_tvshow_dir;
 pub use nfo::Nfo;
 pub use episode::Episode;
 
