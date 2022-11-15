@@ -6,7 +6,7 @@ use notflix_backend::config;
 use notflix_backend::db;
 use notflix_backend::kodifs;
 use notflix_backend::server;
-use notflix_backend::models::Movie;
+use notflix_backend::models::{Movie, TVShow};
 
 #[derive(StructOpt, Debug)]
 #[structopt(setting = clap::AppSettings::VersionlessSubcommands)]
@@ -197,31 +197,50 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
 async fn update(opts: UpdateOpts) -> anyhow::Result<()> {
     let db = db::Db::connect(&opts.database).await?;
 
+    let mut coll = collections::Collection {
+        name: "Movies".to_string(),
+        type_: "movies".to_string(),
+        directory: opts.directory.clone(),
+        collection_id: 1,
+        baseurl: "/".to_string(),
+        ..collections::Collection::default()
+    };
+
     if opts.movie || opts.movies {
-        let mut coll = collections::Collection {
-            name: "Movies".to_string(),
-            type_: "movies".to_string(),
-            directory: opts.directory.clone(),
-            baseurl: "/".to_string(),
-            ..collections::Collection::default()
-        };
         if opts.movie {
             let mut m = opts.directory.rsplitn(2, '/');
             let file_name = m.next().unwrap();
             coll.directory = m.next().unwrap_or(".").to_string();
-            coll.collection_id = 1;
 
             let mut txn = db.handle.begin().await?;
             db.update_movie::<Movie>(&coll, file_name, &mut txn).await?;
             txn.commit().await?;
-            println!("movie updated!");
+            println!("movie {} updated!", file_name);
         }
         if opts.movies {
-            eprintln!("not implemented");
+            db.update_collection(&coll).await?;
+            println!("collection {} updated!", opts.directory);
         }
     }
     if opts.tvshow || opts.tvshows {
-            eprintln!("not implemented");
+        coll.name = "TVShows".to_string();
+        coll.type_ = "tvshows".to_string();
+        coll.collection_id = 2;
+
+        if opts.tvshow {
+            let mut m = opts.directory.rsplitn(2, '/');
+            let file_name = m.next().unwrap();
+            coll.directory = m.next().unwrap_or(".").to_string();
+
+            let mut txn = db.handle.begin().await?;
+            db.update_movie::<TVShow>(&coll, file_name, &mut txn).await?;
+            txn.commit().await?;
+            println!("movie {} updated!", file_name);
+        }
+        if opts.movies {
+            db.update_collection(&coll).await?;
+            println!("collection {} updated!", opts.directory);
+        }
     }
     Ok(())
 }

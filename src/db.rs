@@ -209,13 +209,17 @@ impl Db {
                 Ok(ts) => {
                     if ts <= d.1 {
                         // Not modified.
+                        log::trace!("update_collection: no change: {}", dir);
                         d.2 = true;
                         continue;
                     }
+                    log::trace!("update_collection: modified: {}", dir);
                 },
                 Err(e) => {
                     if e.kind() != ErrorKind::NotFound {
                         log::error!("Db:update_collection: {}: {}", dir, e);
+                    } else {
+                        log::trace!("update_collection: removed: {}", dir);
                     }
                     continue;
                 }
@@ -237,7 +241,8 @@ impl Db {
         }
 
         // Finally set the deleted flag on all State::Deleted entries.
-        for v in map.values().filter(|v| v.2 == false) {
+        for (dir, v) in map.iter().filter(|(_, v)| v.2 == false) {
+            log::trace!("update_collection: marking as deleted: {}", dir);
             sqlx::query!(
                 r#"
                     UPDATE mediaitems
