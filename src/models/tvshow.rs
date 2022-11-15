@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde::Serialize;
-use crate::db::DbHandle;
+use crate::db::Db;
 use super::nfo::build_struct;
 use super::{Actor, Rating, Thumb, UniqueId};
 use super::{Episode, NfoBase, NfoMovie, FileInfo, J, JV, is_default};
@@ -54,7 +54,7 @@ impl TVShow {
         self.status = other.status.clone();
     }
 
-    pub async fn select_one(dbh: &DbHandle, id: i64) -> Option<TVShow> {
+    pub async fn select_one(db: &Db, id: i64) -> Option<TVShow> {
         let r = sqlx::query!(
             r#"
                 SELECT i.id AS "id: i64",
@@ -85,7 +85,7 @@ impl TVShow {
                 WHERE i.id = ? AND i.deleted = 0"#,
             id,
         )
-        .fetch_one(dbh)
+        .fetch_one(&db.handle)
         .await
         .ok()?;
         build_struct!(TVShow, r,
@@ -97,7 +97,7 @@ impl TVShow {
             total_seasons, total_episodes, status)
     }
 
-    pub async fn insert(&mut self, dbh: &DbHandle) -> Result<()> {
+    pub async fn insert(&mut self, db: &Db) -> Result<()> {
         self.id = sqlx::query!(
             r#"
                 INSERT INTO mediaitems(
@@ -132,7 +132,7 @@ impl TVShow {
             self.nfo_base.credits,
             self.nfo_base.directors,
         )
-        .execute(dbh)
+        .execute(&db.handle)
         .await?
         .last_insert_rowid();
 
@@ -163,13 +163,13 @@ impl TVShow {
             self.total_episodes,
             self.status
         )
-        .execute(dbh)
+        .execute(&db.handle)
         .await?;
 
         Ok(())
     }
 
-    pub async fn update(&self, dbh: &DbHandle) -> Result<()> {
+    pub async fn update(&self, db: &Db) -> Result<()> {
         sqlx::query!(
             r#"
                 UPDATE mediaitems SET
@@ -204,7 +204,7 @@ impl TVShow {
             self.nfo_base.directors,
             self.id
         )
-        .execute(dbh)
+        .execute(&db.handle)
         .await?;
 
         sqlx::query!(
@@ -233,7 +233,7 @@ impl TVShow {
             self.status,
             self.id
         )
-        .execute(dbh)
+        .execute(&db.handle)
         .await?;
 
         Ok(())

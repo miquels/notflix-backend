@@ -5,7 +5,7 @@ use crate::models::{FileInfo, Movie};
 use crate::util::SystemTimeToUnixTime;
 use super::*;
 
-pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<Movie>, only_nfo: bool) -> Option<Movie> {
+pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<Box<Movie>>, only_nfo: bool) -> Option<Box<Movie>> {
 
     // First get all directory entries.
     dirname = dirname.trim_end_matches('/');
@@ -45,11 +45,11 @@ pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<
     // let added = (added_ts.len() > 0).then(|| DateTime<offset::Utc>::from(added_ts[0]));
 
     // Initial Movie.
-    let mut movie = dbent.unwrap_or_else(|| Movie {
+    let mut movie = dbent.unwrap_or_else(|| Box::new(Movie {
         lastmodified: video.modified.unixtime_ms(),
         collection_id: coll.collection_id as i64,
         ..Movie::default()
-    });
+    }));
 
     // If the directory name changed, we need to update the db.
     if movie.directory.path != dirname {

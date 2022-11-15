@@ -1067,6 +1067,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "async-recursion",
+ "async-trait",
  "axum",
  "axum-server",
  "clap",

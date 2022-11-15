@@ -14,6 +14,37 @@ pub use uniqueids::UniqueIds;
 pub use misc::*;
 pub use nfo::{NfoBase, NfoMovie};
 
+use async_trait::async_trait;
+use crate::db::Db;
+
+#[async_trait]
+pub trait MediaItem {
+    async fn insert(&mut self, db: &Db) -> anyhow::Result<()>;
+    async fn update(&self, db: &Db) -> anyhow::Result<()>;
+}
+
+#[async_trait]
+impl MediaItem for Movie {
+    async fn insert(&mut self, db: &Db) -> anyhow::Result<()> {
+        self.insert(db).await
+    }
+
+    async fn update(&self, db: &Db) -> anyhow::Result<()> {
+        self.update(db).await
+    }
+}
+
+#[async_trait]
+impl MediaItem for TVShow {
+    async fn insert(&mut self, db: &Db) -> anyhow::Result<()> {
+        self.insert(db).await
+    }
+
+    async fn update(&self, db: &Db) -> anyhow::Result<()> {
+        self.update(db).await
+    }
+}
+
 type J<T> = sqlx::types::Json<T>;
 type JV<T> = sqlx::types::Json<Vec<T>>;
 

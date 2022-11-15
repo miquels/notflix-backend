@@ -5,8 +5,8 @@ use crate::collections::Collection;
 use crate::models::{self, TVShow, Season, FileInfo};
 use super::*;
 
-pub async fn build_show(coll: &Collection, name: &str) -> Option<TVShow> {
-    Show::build_show(coll, name, None, false).await
+pub async fn scan_tvshow_dir(coll: &Collection, name: &str, db_tvshow: Option<Box<TVShow>>, nfo_only: bool) -> Option<Box<TVShow>> {
+    Show::build_show(coll, name, db_tvshow, nfo_only).await
 }
 
 #[derive(Debug)]
@@ -19,7 +19,7 @@ struct EpMap {
 pub struct Show {
     ep_map:  HashMap<String, EpMap>,
     pub basedir: String,
-    pub tvshow:  TVShow,
+    pub tvshow:  Box<TVShow>,
     seasons: Vec<Season>,
 }
 
@@ -156,13 +156,13 @@ impl Show {
         false
     }
 
-    async fn build_show(coll: &Collection, dir: &str, db_tvshow: Option<TVShow>, nfo_only: bool) -> Option<TVShow> {
+    async fn build_show(coll: &Collection, dir: &str, db_tvshow: Option<Box<TVShow>>, nfo_only: bool) -> Option<Box<TVShow>> {
 
         let fileinfo = FileInfo::from_path(&coll.directory, dir).await.ok()?;
-        let mut tvshow = db_tvshow.unwrap_or_else(|| TVShow {
+        let mut tvshow = db_tvshow.unwrap_or_else(|| Box::new(TVShow {
             collection_id: coll.collection_id as i64,
             ..TVShow::default()
-        });
+        }));
         tvshow.directory = sqlx::types::Json(fileinfo);
 
         let mut item = Show {

@@ -3,12 +3,12 @@
 /// This is where we put data scraped from the filesystem into
 /// the database.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use sqlx::sqlite::SqlitePool;
 
 use crate::collections::Collection;
 use crate::models::{Movie, UniqueId, UniqueIds};
-use crate::kodifs::{self, scandirs};
+use crate::kodifs::KodiFS;
 use crate::util::SystemTimeToUnixTime;
 
 pub type DbHandle = SqlitePool;
@@ -71,7 +71,7 @@ impl Db {
             log::trace!("Db::update_movie: not found by name in db: {}", name);
 
             // Open the movies NFO file to read the unqiqueids.
-            if let Some(mv) = kodifs::scan_movie_dir(coll, name, None, true).await {
+            if let Some(mv) = Movie::scan_directory(coll, name, None, true).await {
 
                 // Try to find the movie in the db by uniqueid.
                 let by = FindItemBy::uniqueids(&mv.nfo_base.uniqueids, true);
@@ -83,7 +83,7 @@ impl Db {
                     // and we remembered the ID it had then.
                     if let Some(id) = self.lookup(&by).await {
                         log::trace!("Db::update_movie:: found movie id in db by uniqueid");
-                        let mut mv = Movie::default();
+                        let mut mv = Box::new(Movie::default());
                         mv.id = id;
                         oldmovie = Some(mv);
                     }
@@ -91,12 +91,16 @@ impl Db {
             }
         }
         let old_lastmodified = oldmovie.as_ref().map(|m| m.lastmodified).unwrap_or(0);
-        //println!("OLDMOVIE: {:#?}", oldmovie);
 
         // Now scan the movie directory.
-        let mut movie = match kodifs::scan_movie_dir(coll, name, oldmovie, false).await {
+        let mut movie = match Movie::scan_directory(coll, name, oldmovie, false).await {
             Some(mv) => mv,
-            None => bail!("db::update_movie: failed to scan directory {}", name),
+            None => {
+                // FIXME This is an error, but non-fatal, the transaction was not aborted.
+                // So log an error and return "success".
+                log::error!("db::update_movie: failed to scan directory {}", name);
+                return Ok(());
+            },
         };
 
         // insert or update?
@@ -117,45 +121,25 @@ impl Db {
         if let Some(nfofile) = movie.nfofile.as_ref() {
             if nfofile.modified.unixtime_ms() > old_lastmodified {
                 let uids = UniqueIds::new(movie.id);
-                uids.update(self, &movie.nfo_base.uniqueids).await?;
+                uids.update(self, &movie.nfo_base.uniqueids).await
+                    .with_context(|| format!("failed to update uniqueids table for {}", name))?;
             }
         }
 
         Ok(())
     }
-
+/*
     // Update a collection of movies.
     pub async fn update_movie_collection(&self, coll: &Collection) -> Result<()> {
+
+        // Get a list of directories from the filesystem.
         let mut names = Vec::new();
-        scandirs::read_dir(&coll.directory, false, &mut names).await;
-        if names.len() == 0 {
+        let mut dirs = scandirs::read_dir(&coll.directory, false, &mut names).await;
+        if dirs.len() == 0 {
             log::error!("Db:update_movie_collection: empty dir: {}", coll.directory);
             return Ok(());
         }
 
-        // names -> HashMap<String, u64> (lastmodified).
-        //
-        // Now we loop over all the movies in the collection:
-        // - get the lastmodified from the directory
-        //   - can fail:
-        //     - ENOENT: mark as deleted, UPDATE database
-        //     - other error: just log
-        //     - then remove entry from 'names', continue
-        // - if directory.lastmodified <= db.lastmadified
-        //     - then remove entry from 'names', continue
-        // - rescan directory
-        //     - ENOENT: mark as deleted, UPDATE database
-        //     - other error: just log
-        //     - success: UPDATE
-        //     - then remove entry from 'names', continue
-        //
-        //  - finally, we'll might have some dirs left in 'names'.
-        //    scan those as well, and insert/update.
-        //
-        //
-
-        todo!()
-    }
 
     // Lookup a movie or tvshow in the database and return it's ID.
     pub async fn lookup(&self, by: &FindItemBy<'_>) -> Option<i64> {

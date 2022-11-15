@@ -42,7 +42,7 @@ pub struct Movie {
 }
 
 impl Movie {
-    pub async fn lookup_by(db: &Db, find: &FindItemBy<'_>) -> Option<Movie> {
+    pub async fn lookup_by(db: &Db, find: &FindItemBy<'_>) -> Option<Box<Movie>> {
 
         // Find the ID.
         let id = match find.is_only_id() {
@@ -92,13 +92,14 @@ impl Movie {
             },
         };
 
-        build_struct!(Movie, r,
+        let m = build_struct!(Movie, r,
             id, collection_id, directory, lastmodified, dateadded, nfofile, thumbs,
             nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.ratings,
             nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
             nfo_movie.originaltitle, nfo_movie.sorttitle, nfo_movie.countries,
             nfo_movie.genres, nfo_movie.studios, nfo_movie.premiered, nfo_movie.mpaa,
-            runtime, video)
+            runtime, video)?;
+        Some(Box::new(m))
     }
 
     pub async fn insert(&mut self, db: &Db) -> Result<()> {

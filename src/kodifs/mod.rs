@@ -1,7 +1,10 @@
+use async_trait::async_trait;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use url::Url;
-use crate::models::{Thumb, ThumbState};
+
+use crate::models::{self, Thumb, ThumbState};
+use crate::collections::Collection;
 
 mod movies;
 mod nfo;
@@ -10,10 +13,37 @@ mod episode;
 pub mod scandirs;
 
 pub use movies::scan_movie_dir;
-pub use scandirs::{scan_directory, scan_directories};
-pub use shows::build_show;
+pub use shows::scan_tvshow_dir;
 pub use nfo::Nfo;
 pub use episode::Episode;
+
+#[async_trait]
+pub trait KodiFS {
+    async fn scan_directory(coll: &Collection, name: &str, db_item: Option<Box<Self>>, only_nfo: bool) -> Option<Box<Self>>;
+    async fn id(&self) -> i64;
+}
+
+#[async_trait]
+impl KodiFS for models::TVShow {
+    async fn scan_directory(coll: &Collection, name: &str, db_item: Option<Box<Self>>, only_nfo: bool) -> Option<Box<Self>> {
+        let item = scan_tvshow_dir(coll, name, db_item, only_nfo).await?;
+        Some(item)
+    }
+    async fn id(&self) -> i64 {
+        self.id
+    }
+}
+
+#[async_trait]
+impl KodiFS for models::Movie {
+    async fn scan_directory(coll: &Collection, name: &str, db_item: Option<Box<Self>>, only_nfo: bool) -> Option<Box<Self>> {
+        let item = scan_movie_dir(coll, name, db_item, only_nfo).await?;
+        Some(item)
+    }
+    async fn id(&self) -> i64 {
+        self.id
+    }
+}
 
 // Helper macro.
 macro_rules! def_regex {
