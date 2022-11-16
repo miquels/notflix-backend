@@ -232,12 +232,13 @@ async fn update(opts: UpdateOpts) -> anyhow::Result<()> {
             let file_name = m.next().unwrap();
             coll.directory = m.next().unwrap_or(".").to_string();
 
+            log::trace!("update tvshow {} in dir {}", file_name, coll.directory);
             let mut txn = db.handle.begin().await?;
             db.update_movie::<TVShow>(&coll, file_name, &mut txn).await?;
             txn.commit().await?;
-            println!("movie {} updated!", file_name);
+            println!("tvshow {} updated!", file_name);
         }
-        if opts.movies {
+        if opts.tvshows {
             db.update_collection(&coll).await?;
             println!("collection {} updated!", opts.directory);
         }

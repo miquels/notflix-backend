@@ -14,9 +14,11 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { version = "1.0", features = ["backtrace"] }
 arc-swap = "1.5.0"
+async-trait = "0.1.58"
 axum-server = "0.4.2"
 axum = "0.5.4"
 async-recursion = "1.0"
+chrono = { version = "0.4.23", features = ["std", "clock"] }
 clap = "2.33"
 curlyconf = "0.1.0"
 env_logger = "0.9.3"
@@ -43,7 +45,6 @@ tower-http = { version = "0.3.2", features = [ "trace", "cors", "compression-gzi
 url = "2.2.2"
 
 mp4lib = { version = "0.1", features = [ "axum-box-body"], path = "../mp4/mp4lib" }
-async-trait = "0.1.58"
 
 [build-dependencies]
 anyhow = "1.0"

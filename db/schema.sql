@@ -78,7 +78,7 @@ CREATE TABLE tvshows(
   episodes INTEGER,
   status TEXT,
 
-  FOREIGN KEY(id) REFERENCES mediaitems(id)
+  FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
 );
 
 CREATE TABLE episodes(
@@ -96,7 +96,7 @@ CREATE TABLE episodes(
   displayepisode INTEGER,
   thumbs JSON NOT NULL DEFAULT "[]",
 
-  FOREIGN KEY(id) REFERENCES mediaitems(id),
+  FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id),
   FOREIGN KEY(tvshow_id) REFERENCES mediaitems(id)
 );
 

@@ -23,9 +23,11 @@ use crate::util::SystemTimeToUnixTime;
 pub trait MediaItem {
     fn id(&self) -> i64;
     fn set_id(&mut self, id: i64);
+    fn set_collection_id(&mut self, id: i64);
     fn uniqueids(&self) -> &'_ [UniqueId];
     fn lastmodified(&self) -> i64;
     fn nfo_lastmodified(&self) -> Option<i64>;
+    fn undelete(&mut self);
     async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &db::FindItemBy<'_>) -> Option<Box<Self>>;
     async fn insert(&mut self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()>;
     async fn update(&self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()>;
@@ -41,6 +43,10 @@ impl MediaItem for Movie {
         self.id = id;
     }
 
+    fn set_collection_id(&mut self, id: i64) {
+        self.collection_id = id;
+    }
+
     fn uniqueids(&self) -> &'_ [UniqueId] {
         self.nfo_base.uniqueids.0.as_ref()
     }
@@ -51,6 +57,13 @@ impl MediaItem for Movie {
 
     fn nfo_lastmodified(&self) -> Option<i64> {
         self.nfofile.as_ref().map(|m| m.modified.unixtime_ms())
+    }
+
+    fn undelete(&mut self) {
+        if self.deleted {
+            self.deleted = false;
+            self.lastmodified = 0;
+        }
     }
 
     async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &db::FindItemBy<'_>) -> Option<Box<Self>> {
@@ -76,6 +89,10 @@ impl MediaItem for TVShow {
         self.id = id;
     }
 
+    fn set_collection_id(&mut self, id: i64) {
+        self.collection_id = id;
+    }
+
     fn uniqueids(&self) -> &'_ [UniqueId] {
         self.nfo_base.uniqueids.0.as_ref()
     }
@@ -86,6 +103,13 @@ impl MediaItem for TVShow {
 
     fn nfo_lastmodified(&self) -> Option<i64> {
         self.nfofile.as_ref().map(|m| m.modified.unixtime_ms())
+    }
+
+    fn undelete(&mut self) {
+        if self.deleted {
+            self.deleted = false;
+            self.lastmodified = 0;
+        }
     }
 
     async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &db::FindItemBy<'_>) -> Option<Box<Self>> {

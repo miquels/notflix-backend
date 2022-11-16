@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde::Serialize;
-use crate::db;
+use crate::db::{self, FindItemBy};
 use super::nfo::build_struct;
 use super::{Actor, Rating, Thumb, UniqueId};
 use super::{Episode, NfoBase, NfoMovie, FileInfo, J, JV, is_default};
@@ -13,6 +13,8 @@ pub struct TVShow {
     pub collection_id: i64,
     #[serde(skip_serializing)]
     pub directory: sqlx::types::Json<FileInfo>,
+    #[serde(skip)]
+    pub deleted: bool,
     #[serde(skip)]
     pub lastmodified: i64,
     #[serde(skip_serializing_if = "is_default")]
@@ -54,12 +56,20 @@ impl TVShow {
         self.status = other.status.clone();
     }
 
-    pub async fn select_one(dbh: &mut db::TxnHandle<'_>, id: i64) -> Option<TVShow> {
+    pub async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &FindItemBy<'_>) -> Option<Box<TVShow>> {
+        // Find the ID.
+        let id = match find.is_only_id() {
+            Some(id) => id,
+            None => db::lookup(dbh, &find).await?,
+        };
+
+        // Find the item in the database.
         let r = sqlx::query!(
             r#"
                 SELECT i.id AS "id: i64",
                        i.collection_id AS "collection_id: i64",
                        i.directory AS "directory!: J<FileInfo>",
+                       i.deleted AS "deleted!: bool",
                        i.lastmodified,
                        i.dateadded,
                        i.nfofile AS "nfofile?: J<FileInfo>",
@@ -82,19 +92,21 @@ impl TVShow {
                        m.status
                 FROM mediaitems i
                 JOIN tvshows m ON m.mediaitem_id = i.id
-                WHERE i.id = ? AND i.deleted = 0"#,
+                WHERE i.id = ? AND (i.deleted = 0 OR i.deleted = ?)"#,
             id,
+            find.deleted_too,
         )
         .fetch_one(dbh)
         .await
         .ok()?;
-        build_struct!(TVShow, r,
-            id, collection_id, directory, lastmodified, dateadded, nfofile, thumbs,
+        let m = build_struct!(TVShow, r,
+            id, collection_id, directory, deleted, lastmodified, dateadded, nfofile, thumbs,
             nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.ratings,
             nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
             nfo_movie.originaltitle, nfo_movie.sorttitle, nfo_movie.countries,
             nfo_movie.genres, nfo_movie.studios, nfo_movie.premiered, nfo_movie.mpaa,
-            total_seasons, total_episodes, status)
+            total_seasons, total_episodes, status)?;
+        Some(Box::new(m))
     }
 
     pub async fn insert(&mut self, txn: &mut db::TxnHandle<'_>) -> Result<()> {
@@ -104,6 +116,7 @@ impl TVShow {
                     type,
                     collection_id,
                     directory,
+                    deleted,
                     lastmodified,
                     dateadded,
                     nfofile,
@@ -116,9 +129,10 @@ impl TVShow {
                     actors,
                     credits,
                     directors
-                ) VALUES("tvshow", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES("tvshow", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.collection_id,
             self.directory,
+            self.deleted,
             self.lastmodified,
             self.dateadded,
             self.nfofile,
@@ -175,6 +189,7 @@ impl TVShow {
                 UPDATE mediaitems SET
                     collection_id = ?,
                     directory = ?,
+                    deleted = ?,
                     lastmodified = ?,
                     dateadded = ?,
                     thumbs = ?,
@@ -190,6 +205,7 @@ impl TVShow {
                 WHERE id = ?"#,
             self.collection_id,
             self.directory,
+            self.deleted,
             self.lastmodified,
             self.dateadded,
             self.thumbs,

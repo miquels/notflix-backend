@@ -14,6 +14,8 @@ pub struct Movie {
     #[serde(skip_serializing)]
     pub directory: sqlx::types::Json<FileInfo>,
     #[serde(skip)]
+    pub deleted: bool,
+    #[serde(skip)]
     pub lastmodified: i64,
     #[serde(skip_serializing)]
     pub dateadded: Option<String>,
@@ -55,6 +57,7 @@ impl Movie {
                 SELECT i.id AS "id: i64",
                        i.collection_id AS "collection_id: i64",
                        i.directory AS "directory!: J<FileInfo>",
+                       i.deleted AS "deleted!: bool",
                        i.lastmodified,
                        i.dateadded,
                        i.nfofile AS "nfofile?: J<FileInfo>",
@@ -92,7 +95,7 @@ impl Movie {
         };
 
         let m = build_struct!(Movie, r,
-            id, collection_id, directory, lastmodified, dateadded, nfofile, thumbs,
+            id, collection_id, directory, deleted, lastmodified, dateadded, nfofile, thumbs,
             nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.ratings,
             nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
             nfo_movie.originaltitle, nfo_movie.sorttitle, nfo_movie.countries,
@@ -109,6 +112,7 @@ impl Movie {
                     type,
                     collection_id,
                     directory,
+                    deleted,
                     lastmodified,
                     dateadded,
                     thumbs,
@@ -121,9 +125,10 @@ impl Movie {
                     actors,
                     credits,
                     directors
-                ) VALUES("movie", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES("movie", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.collection_id,
             self.directory,
+            self.deleted,
             self.lastmodified,
             self.dateadded,
             self.thumbs,
@@ -192,6 +197,7 @@ impl Movie {
                 UPDATE mediaitems SET
                     collection_id = ?,
                     directory = ?,
+                    deleted = ?,
                     lastmodified = ?,
                     dateadded = ?,
                     thumbs = ?,
@@ -207,6 +213,7 @@ impl Movie {
                 WHERE id = ?"#,
             self.collection_id,
             self.directory,
+            self.deleted,
             self.lastmodified,
             self.dateadded,
             self.thumbs,

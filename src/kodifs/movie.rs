@@ -1,4 +1,5 @@
 use std::time::SystemTime;
+use chrono::TimeZone;
 
 use crate::collections::*;
 use crate::models::{FileInfo, Movie};
@@ -12,17 +13,9 @@ pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<
     let dirinfo = FileInfo::from_path(&coll.directory, dirname).await.ok()?;
     let dirpath = dirinfo.fullpath.clone();
     let mut entries = Vec::new();
-    scandirs::read_dir(&dirpath, false, &mut entries).await;
+    let (oldest, newest) = scandirs::read_dir(&dirpath, false, &mut entries, true).await.ok()?;
 
-    // Collect timestamps.
-    let mut added_ts = Vec::new();
-    added_ts.push(dirinfo.modified);
-    if let Ok(created) = tokio::fs::metadata(&dirpath).await.and_then(|m| m.created()) {
-        added_ts.push(created);
-    }
-
-    // Loop over all directory entries. We need to find a video file.
-    // If we don't, skip the entire directory.
+    // Loop over all directory entries.
     let mut basepath = String::new();
     let mut video = None;
     for name in &entries {
@@ -37,19 +30,22 @@ pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<
         basepath = caps[1].to_string();
         break;
     }
-    let video = video?;
-    added_ts.push(video.modified);
 
-    // `added_ts` contains a list of dates, use the oldest as `added`.
-    added_ts.sort();
-    // let added = (added_ts.len() > 0).then(|| DateTime<offset::Utc>::from(added_ts[0]));
+    // If we didn't find a video file, return None.
+    let video = video?;
 
     // Initial Movie.
     let mut movie = dbent.unwrap_or_else(|| Box::new(Movie {
-        lastmodified: video.modified.unixtime_ms(),
         collection_id: coll.collection_id as i64,
+        video: sqlx::types::Json(video),
         ..Movie::default()
     }));
+    movie.lastmodified = newest;
+    if movie.dateadded.is_none() {
+        if let chrono::LocalResult::Single(c) = chrono::Local.timestamp_millis_opt(oldest) {
+            movie.dateadded = Some(c.format("%Y-%m-%d").to_string());
+        }
+    }
 
     // If the directory name changed, we need to update the db.
     if movie.directory.path != dirname {
@@ -57,8 +53,8 @@ pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<
             log::debug!("Movie::scan_movie_dir: directory rename {} -> {}", movie.directory.path, dirname);
         }
         movie.lastmodified = SystemTime::now().unixtime_ms();
-        movie.directory = sqlx::types::Json(dirinfo);
     }
+    movie.directory = sqlx::types::Json(dirinfo);
 
     // If the directory name ends with <space>(YYYY) then it's a year.
     // Remember that year as backup in case there's no NFO file.
@@ -105,13 +101,11 @@ pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<
             match super::Nfo::read(&mut file).await {
                 Ok(nfo) => {
                     nfo.update_movie(&mut movie);
-                    let m = nfofile.as_ref().unwrap().modified.unixtime_ms();
-                    if m > movie.lastmodified {
-                        movie.lastmodified = m;
-                    }
                     movie.nfofile = nfofile;
                 },
                 Err(e) => {
+                    // We failed. Will automatically try again as soon
+                    // as ctime or mtime of the file is updated.
                     println!("error reading nfo: {}", e);
                 },
             }

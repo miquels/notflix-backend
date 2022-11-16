@@ -1,12 +1,17 @@
 use std::collections::HashMap;
-// use std::time::Duration;
+use std::time::SystemTime;
+use std::io;
+
+use chrono::TimeZone;
 
 use crate::collections::Collection;
 use crate::models::{self, TVShow, Season, FileInfo};
+use crate::util::SystemTimeToUnixTime;
 use super::episode::Episode;
 use super::*;
 
 pub async fn scan_tvshow_dir(coll: &Collection, name: &str, db_tvshow: Option<Box<TVShow>>, nfo_only: bool) -> Option<Box<TVShow>> {
+    log::trace!("scan_tvshow_dir {}", name);
     Show::build_show(coll, name, db_tvshow, nfo_only).await
 }
 
@@ -65,13 +70,19 @@ impl Show {
         false
     }
 
-    async fn show_scan_dir(&mut self) {
+    async fn show_scan_dir(&mut self) -> io::Result<()> {
 
         // Get all the files up front.
-        let mut entries = Vec::new();
-        scandirs::read_dir(&self.basedir, true, &mut entries).await;
-
         let mut episodes = Vec::new();
+        let mut entries = Vec::new();
+        let (oldest, newest) = scandirs::read_dir(&self.basedir, true, &mut entries, true).await?;
+
+        self.set_lastmodified(newest);
+        if self.tvshow.dateadded.is_none() {
+            if let chrono::LocalResult::Single(c) = chrono::Local.timestamp_millis_opt(oldest) {
+                self.tvshow.dateadded = Some(c.format("%Y-%m-%d").to_string());
+            }
+        }
 
         // First loop: find tvshow and season images, tvshow.nfo file, episode video files.
         for name in &entries {
@@ -119,6 +130,8 @@ impl Show {
             let season_idx = self.get_season(ep.season as u32);
             self.seasons[season_idx].episodes.push(ep);
         }
+
+        Ok(())
     }
 
     // Check for:
@@ -157,20 +170,31 @@ impl Show {
         false
     }
 
-    async fn build_show(coll: &Collection, dir: &str, db_tvshow: Option<Box<TVShow>>, nfo_only: bool) -> Option<Box<TVShow>> {
+    async fn build_show(coll: &Collection, dirname: &str, db_tvshow: Option<Box<TVShow>>, nfo_only: bool) -> Option<Box<TVShow>> {
 
-        let fileinfo = FileInfo::from_path(&coll.directory, dir).await.ok()?;
-        let mut tvshow = db_tvshow.unwrap_or_else(|| Box::new(TVShow {
+        let fileinfo = FileInfo::from_path(&coll.directory, dirname).await.ok()?;
+        let basedir = fileinfo.fullpath.clone();
+
+        let tvshow = db_tvshow.unwrap_or_else(|| Box::new(TVShow {
             collection_id: coll.collection_id as i64,
+            lastmodified: SystemTime::now().unixtime_ms(),
             ..TVShow::default()
         }));
-        tvshow.directory = sqlx::types::Json(fileinfo);
 
         let mut item = Show {
-            basedir: format!("{}/{}", coll.directory, dir),
+            basedir,
             tvshow,
             ..Show::default()
         };
+
+        // If the directory name changed, we need to update the db.
+        if item.tvshow.directory.path != dirname {
+            if item.tvshow.directory.path != "" {
+                log::debug!("tvshow::scan_tvshow_dir: directory rename {} -> {}", item.tvshow.directory.path, dirname);
+            }
+            item.set_lastmodified(0);
+        }
+        item.tvshow.directory = sqlx::types::Json(fileinfo);
 
         if nfo_only {
             return item.show_read_nfo().await.then(|| item.tvshow);
@@ -192,7 +216,7 @@ impl Show {
         }
 
         // Scan the show's directory.
-        item.show_scan_dir().await;
+        item.show_scan_dir().await.ok()?;
 
         // remove episodes without video, then sort.
         for season_idx in 0 .. item.seasons.len() {
@@ -234,5 +258,15 @@ impl Show {
         let Show { mut tvshow, seasons, .. } = item;
         tvshow.seasons = seasons;
         Some(tvshow)
+    }
+
+    pub fn set_lastmodified(&mut self, ts: i64) {
+        if ts == 0 {
+            self.tvshow.lastmodified = SystemTime::now().unixtime_ms();
+            return;
+        }
+        if self.tvshow.lastmodified < ts || self.tvshow.lastmodified == 0 {
+            self.tvshow.lastmodified = ts;
+        }
     }
 }
