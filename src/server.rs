@@ -37,7 +37,7 @@ pub async fn serve(cfg: Config, db: DbHandle) -> anyhow::Result<()> {
         let tls_cert = cfg.server.tls_cert.clone().unwrap();
         let tls_key = cfg.server.tls_key.clone().unwrap();
         let mut tls_file_state = TlsFileState::new();
-        load_tls_config(&mut tls_file_state, &tls_cert, &tls_key).await
+        load_tls_config(&mut tls_file_state, &tls_cert, &tls_key, true).await
             .with_context(|| "failed to load certificate")?;
 
         let (tx, rx) =  flume::bounded(cfg.server.tls_listen.len() + 1);
@@ -48,8 +48,9 @@ pub async fn serve(cfg: Config, db: DbHandle) -> anyhow::Result<()> {
 
         tokio::spawn(async move {
             let mut tls_file_state = TlsFileState::new();
+            let mut first = true;
             loop {
-                match load_tls_config(&mut tls_file_state, &tls_cert, &tls_key).await {
+                match load_tls_config(&mut tls_file_state, &tls_cert, &tls_key, first).await {
                     Ok(Some(tls_config)) => {
                         if let Err(_) = tx.send_async(tls_config).await {
                             break;
@@ -58,6 +59,7 @@ pub async fn serve(cfg: Config, db: DbHandle) -> anyhow::Result<()> {
                     Ok(None) => {},
                     Err(e) => log::error!("failed to reload certificate: {}", e),
                 }
+                first = false;
                 tokio::time::sleep(Duration::from_secs(600)).await;
             }
         });
@@ -111,14 +113,15 @@ async fn stat(file: &str, size: &mut u64, time: &mut SystemTime) -> io::Result<(
     Ok(())
 }
 
-async fn load_tls_config(tls_file_state: &mut TlsFileState, tls_cert: &str, tls_key: &str) -> io::Result<Option<RustlsConfig>> {
-    log::debug!("load_tls_config");
+async fn load_tls_config(tls_file_state: &mut TlsFileState, tls_cert: &str, tls_key: &str, first: bool) -> io::Result<Option<RustlsConfig>> {
     let mut newstate = TlsFileState::new();
     stat(tls_cert, &mut newstate.cert_size, &mut newstate.cert_time).await?;
     stat(tls_key, &mut newstate.key_size, &mut newstate.key_time).await?;
     if *tls_file_state == newstate {
-        log::debug!("load_tls_config: no change");
         return Ok(None);
+    }
+    if !first {
+        log::info!("new tls certificate detected - reloading");
     }
     let tls_config = RustlsConfig::new().fallback(
         RustlsCertificate::new()
@@ -126,7 +129,6 @@ async fn load_tls_config(tls_file_state: &mut TlsFileState, tls_cert: &str, tls_
             .key(tokio::fs::read(tls_key).await?)
     );
     *tls_file_state = newstate;
-    log::debug!("load_tls_config: loaded.");
     Ok(Some(tls_config))
 }
 
