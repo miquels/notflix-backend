@@ -1,22 +1,18 @@
-use std::net::SocketAddr;
 use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::io;
+use std::time::{Duration, SystemTime};
 
-use axum::{Router, body::Body, response::Response, routing::get};
-use axum::extract::ConnectInfo;
-use futures_core::future::BoxFuture;
-use http::{Method, Request};
-use http_body::Body as _;
-use tower::{Service, ServiceBuilder};
-use tower_http::trace::TraceLayer;
-use tower_http::cors::{self, CorsLayer};
-use tower_http::compression::{
-    CompressionLayer,
-    predicate::{Predicate, NotForContentType, DefaultPredicate},
+use anyhow::Context;
+use poem::{
+    get, handler,
+    listener::{Listener, RustlsCertificate, RustlsConfig, TcpListener},
+    middleware::AddData,
+    Endpoint, EndpointExt, Result, Request, Response, IntoResponse,
+    Route, Server,
 };
 
-use crate::api;
-use crate::data;
+// use crate::api;
+// use crate::data;
 use crate::db::DbHandle;
 use crate::config::Config;
 
@@ -26,89 +22,136 @@ pub struct SharedState {
     pub config: Arc<Config>,
 }
 
+#[handler]
+fn index() -> String {
+    "hello".to_string()
+}
+
 pub async fn serve(cfg: Config, db: DbHandle) -> anyhow::Result<()> {
-    use http::header::{HeaderName, ORIGIN, RANGE};
 
-    let state = SharedState { db, config: Arc::new(cfg) };
-    let addr = state.config.server.addrs[0];
+    let mut listeners = Vec::new();
 
-    let x_app = HeaderName::from_static("x-application");
-    let x_plb = HeaderName::from_static("x-playback-session-id");
+    if cfg.server.tls_listen.len() > 0 {
 
-    let compress_predicate = DefaultPredicate::new()
-        .and(NotForContentType::const_new("movie/"))
-        .and(NotForContentType::const_new("audio/"));
+        // Try to read the certificates, just to make sure.
+        let tls_cert = cfg.server.tls_cert.clone().unwrap();
+        let tls_key = cfg.server.tls_key.clone().unwrap();
+        let mut tls_file_state = TlsFileState::new();
+        load_tls_config(&mut tls_file_state, &tls_cert, &tls_key).await
+            .with_context(|| "failed to load certificate")?;
 
-    let middleware_stack = ServiceBuilder::new()
-        .layer(TraceLayer::new_for_http())
-        // .layer(Extension(dir))
-        .layer(CompressionLayer::new().compress_when(compress_predicate))
-        .layer(CorsLayer::new()
-            .allow_origin(cors::AllowOrigin::mirror_request())
-            .allow_methods(vec![Method::GET, Method::HEAD])
-            .allow_headers(vec![x_app, x_plb, ORIGIN, RANGE ])
-            .expose_headers(cors::Any)
-            .max_age(std::time::Duration::from_secs(86400)));
+        let (tx, rx) =  flume::bounded(cfg.server.tls_listen.len() + 1);
 
-    let app = Router::new()
-        .route("/", get(|| async { "Hello, world!\n" }))
-        .nest("/api", api::routes())
-        .nest("/data", data::routes())
-        .layer(middleware_stack);
+        for addr in cfg.server.tls_addrs.clone().drain(..) {
+            listeners.push(TcpListener::bind(addr).rustls(rx.clone().into_stream()).boxed());
+        }
 
-    println!("listening on {}", addr);
+        tokio::spawn(async move {
+            let mut tls_file_state = TlsFileState::new();
+            loop {
+                match load_tls_config(&mut tls_file_state, &tls_cert, &tls_key).await {
+                    Ok(Some(tls_config)) => {
+                        if let Err(_) = tx.send_async(tls_config).await {
+                            break;
+                        }
+                    },
+                    Ok(None) => {},
+                    Err(e) => log::error!("failed to reload certificate: {}", e),
+                }
+                tokio::time::sleep(Duration::from_secs(600)).await;
+            }
+        });
+    }
 
-    axum_server::bind(addr)
-        .serve(app.into_make_service())
-        .await?;
+    if cfg.server.listen.len() > 0 {
+        for addr in cfg.server.addrs.clone().drain(..) {
+            listeners.push(TcpListener::bind(addr).boxed());
+        }
+    }
+
+    let mut listener = listeners.pop().unwrap();
+    for l in listeners.drain(..) {
+        listener = listener.combine(l).boxed();
+    }
+
+    let state = SharedState{ db, config: Arc::new(cfg) };
+    let app = Route::new()
+        .at("/", get(index))
+        .with(AddData::new(state))
+        .around(log);
+
+    Server::new(listener).run(app).await?;
 
     Ok(())
 }
 
-#[derive(Clone)]
-struct Logger<S> {
-    inner: S,
+#[derive(PartialEq)]
+struct TlsFileState {
+    cert_size: u64,
+    cert_time: SystemTime,
+    key_size: u64,
+    key_time: SystemTime,
 }
 
-impl<S> Service<Request<Body>> for Logger<S>
-where
-    S: Service<Request<Body>, Response = Response> + Clone + Send + 'static,
-    S::Future: Send + 'static,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
+impl TlsFileState {
+    fn new() -> TlsFileState {
+        TlsFileState {
+            cert_size: 0,
+            cert_time: SystemTime::UNIX_EPOCH,
+            key_size: 0,
+            key_time: SystemTime::UNIX_EPOCH,
+        }
     }
+}
 
-    fn call(&mut self, req: Request<Body>) -> Self::Future {
-        // best practice is to clone the inner service like this
-        // see https://github.com/tower-rs/tower/issues/547 for details
-        let clone = self.inner.clone();
-        let mut inner = std::mem::replace(&mut self.inner, clone);
+async fn stat(file: &str, size: &mut u64, time: &mut SystemTime) -> io::Result<()> {
+    let meta = tokio::fs::metadata(file).await?;
+    *size = meta.len();
+    *time = meta.modified()?;
+    Ok(())
+}
 
-        // store request data.
-        let start = std::time::Instant::now();
-        let now = time::OffsetDateTime::now_local().unwrap_or(time::OffsetDateTime::now_utc());
-        let pnq = req.uri().path_and_query().map(|p| p.to_string()).unwrap_or(String::from("-"));
-        let addr = req
-            .extensions()
-            .get::<ConnectInfo<SocketAddr>>()
-            .map(|s| s.0.to_string())
-            .unwrap_or(String::from("-"));
-        let method = req.method().clone();
-        let version = req.version();
+async fn load_tls_config(tls_file_state: &mut TlsFileState, tls_cert: &str, tls_key: &str) -> io::Result<Option<RustlsConfig>> {
+    log::debug!("load_tls_config");
+    let mut newstate = TlsFileState::new();
+    stat(tls_cert, &mut newstate.cert_size, &mut newstate.cert_time).await?;
+    stat(tls_key, &mut newstate.key_size, &mut newstate.key_time).await?;
+    if *tls_file_state == newstate {
+        log::debug!("load_tls_config: no change");
+        return Ok(None);
+    }
+    let tls_config = RustlsConfig::new().fallback(
+        RustlsCertificate::new()
+            .cert(tokio::fs::read(tls_cert).await?)
+            .key(tokio::fs::read(tls_key).await?)
+    );
+    *tls_file_state = newstate;
+    log::debug!("load_tls_config: loaded.");
+    Ok(Some(tls_config))
+}
 
-        Box::pin(async move {
-            let resp: Response = inner.call(req).await?;
+async fn log<E: Endpoint>(next: E, req: Request) -> Result<Response> {
 
+    // store request data.
+    let start = std::time::Instant::now();
+    let now = chrono::Local::now();
+    let now = now - chrono::Duration::nanoseconds(now.timestamp_nanos() % 1_000_000_000);
+    let pnq = req.uri().path_and_query().map(|p| p.to_string()).unwrap_or(String::from("-"));
+    let addr = req.remote_addr().to_string();
+    let addr = addr.trim_start_matches("socket://");
+    let method = req.method().clone();
+    let version = req.version();
+
+    let res = next.call(req).await;
+
+    match res {
+        Ok(resp) => {
             // log request + response status / size / elapsed.
-            let size = resp.body().size_hint().exact().unwrap_or(0);
+            let resp = resp.into_response();
+            let size = resp.header("content-length").unwrap_or("-");
             println!(
                 "{} {} \"{} {} {:?}\" {} {} {:?}",
-                now,
+                now.to_rfc3339(),
                 addr,
                 method,
                 pnq,
@@ -117,8 +160,19 @@ where
                 size,
                 start.elapsed(),
             );
-
             Ok(resp)
-        })
+        },
+        Err(err) => {
+            println!(
+                "{} {} \"{} {} {:?}\" ERROR: {}",
+                now.to_rfc3339(),
+                addr,
+                method,
+                pnq,
+                version,
+                err
+            );
+            Err(err)
+        },
     }
 }

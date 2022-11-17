@@ -105,10 +105,10 @@ impl Show {
             // Parse the name, see if it's a video, extract information.
             let caps = IS_VIDEO.captures(name);
             let (basepath, hint) = match caps.as_ref() {
-                Some(caps) => (&caps[1], &caps[2]),
+                Some(caps) => (&caps[1], caps.get(2)),
                 None => continue,
             };
-            let season_hint = hint.parse::<u32>().ok();
+            let season_hint = hint.and_then(|season| season.as_str().parse::<u32>().ok());
             let showdir = self.basedir.clone();
             let db_episode = self.get_episode_mut(basepath);
 

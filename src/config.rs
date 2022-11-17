@@ -18,27 +18,34 @@ pub struct Config {
 #[derive(Deserialize)]
 pub struct Server {
     #[serde(default)]
-    pub cachedir: Option<PathBuf>,
+    pub cachedir: Option<String>,
     pub appdir: PathBuf,
     pub database: String,
     #[serde(default)]
-    pub tls: bool,
-    #[serde(default)]
-    pub tls_cert: Option<PathBuf>,
-    #[serde(default)]
-    pub tls_key: Option<PathBuf>,
     pub listen: Vec<String>,
+    #[serde(default)]
+    pub tls_cert: Option<String>,
+    #[serde(default)]
+    pub tls_key: Option<String>,
+    #[serde(default)]
+    pub tls_listen: Vec<String>,
 
     #[serde(default, skip)]
     pub addrs: Vec<SocketAddr>,
+    #[serde(default, skip)]
+    pub tls_addrs: Vec<SocketAddr>,
 }
 
 pub fn from_file(path: &str) -> anyhow::Result<Config> {
     let mut cfg: Config = curlyconf::from_file(path)?;
-    if cfg.server.listen.len() == 0 {
+    if cfg.server.listen.len() == 0 && cfg.server.tls_listen.len() == 0 {
         bail!("{}: no listen addresses configured", path);
     }
+    if cfg.server.tls_listen.len() > 0 && (cfg.server.tls_cert.is_none() || cfg.server.tls_key.is_none()) {
+        bail!("{}: must set tls_cert and tls_key", path);
+    }
     cfg.server.addrs = parse_listeners(&cfg.server.listen).with_context(|| format!("file: {}", path))?;
+    cfg.server.tls_addrs = parse_listeners(&cfg.server.tls_listen).with_context(|| format!("file: {}", path))?;
     Ok(cfg)
 }
 

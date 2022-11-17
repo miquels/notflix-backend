@@ -28,7 +28,8 @@ impl Collection {
 
     /// Scan directory of this collection and update items.
     pub async fn scan(&self) {
-        todo!()
+        println!("obsolete scan called...");
+        //todo!()
     }
 
     /// Get a shallow list of all items (no nfo info, no seasons / episode info).

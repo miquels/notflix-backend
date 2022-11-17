@@ -111,7 +111,8 @@ pub struct ReadNfoOpts {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    env_logger::init();
+    //env_logger::init();
+    tracing_subscriber::fmt::init();
 
     let opts = MainOpts::from_args();
     match opts.cmd {
@@ -132,7 +133,8 @@ async fn serve(opts: ServeOpts) -> anyhow::Result<()> {
     }
 
     let handle = db::connect_db(&cfg.server.database).await?;
-    server::serve(cfg, handle).await
+    server::serve(cfg, handle).await?;
+    Ok(())
 }
 
 async fn dumpdb(_opts: DumpDbOpts) -> anyhow::Result<()> {
