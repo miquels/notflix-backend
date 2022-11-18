@@ -1,9 +1,9 @@
 #[macro_use]
 extern crate anyhow;
 
-// pub mod api;
-pub mod collections;
+pub mod api;
 pub mod config;
+pub mod collections;
 // pub mod data;
 pub mod db;
 pub mod genres;

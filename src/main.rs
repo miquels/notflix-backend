@@ -127,11 +127,6 @@ async fn main() -> anyhow::Result<()> {
 async fn serve(opts: ServeOpts) -> anyhow::Result<()> {
     let cfg = config::from_file(&opts.config)?;
 
-    // FIXME: move somewhere else.
-    for coll in &cfg.collections {
-        coll.scan().await;
-    }
-
     let handle = db::connect_db(&cfg.server.database).await?;
     server::serve(cfg, handle).await?;
     Ok(())

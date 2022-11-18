@@ -1,99 +1,91 @@
-use axum::{
-    extract::Extension,
-    extract::Path,
-    http::StatusCode,
-    http::header::{HeaderMap, HeaderName, HeaderValue},
-    response::Json,
-    routing::get,
-    Router,
+use poem_openapi::{
+    param::Path,
+    payload::Json,
+    OpenApi, Tags,
 };
-use serde_json::{Value, json};
+
+use slab::Slab;
+use tokio::sync::Mutex;
 
 use crate::server::SharedState;
 
-type JsonResponse = (HeaderMap, String);
-fn to_json<T>(value: &T) -> JsonResponse
-where
-    T: ?Sized + serde::Serialize,
-{
-    let mut hm = HeaderMap::new();
-    hm.insert(
-        HeaderName::from_static("content-type"),
-        HeaderValue::from_static("application/json"),
-    );
-    (hm, serde_json::to_string_pretty(value).unwrap() + "\n")
+mod user;
+mod collection;
+
+use user::*;
+use collection::*;
+
+#[derive(Tags)]
+enum ApiTags {
+    /// Operations about user
+    User,
+    // Operations on collections.
+    Collection,
 }
 
-// /api/collections
-async fn get_collections(
-    Extension(state): Extension<SharedState>,
-) -> JsonResponse {
-    to_json(&state.config.collections)
+pub struct Api {
+    users: Mutex<Slab<User>>,
+    state: SharedState,
 }
 
-// /api/collection/:coll
-async fn get_collection(
-    Path(coll): Path<String>,
-    Extension(state): Extension<SharedState>,
-) -> Result<JsonResponse, StatusCode> {
-    state.config.collections
-        .iter()
-        .find(|c| coll == c.name)
-        .map(to_json)
-        .ok_or(StatusCode::NOT_FOUND)
-}
-
-// /api/collection/:coll/genres
-async fn get_genres(
-    Path(_coll): Path<String>,
-    Extension(_state): Extension<SharedState>,
-) -> Json<Value> {
-    Json(json!({ "genre": "none" }))
-}
-
-// /api/collection/:coll/items
-async fn get_items(
-    Path(coll): Path<String>,
-    Extension(state): Extension<SharedState>,
-) -> Result<JsonResponse, StatusCode> {
-    let coll = state
-        .config
-        .collections
-        .iter()
-        .find(|c| coll == c.name);
-    match coll {
-        Some(coll) => Ok(to_json(&coll.get_items().await)),
-        None => Err(StatusCode::NOT_FOUND),
+#[OpenApi]
+impl Api {
+    pub(crate) fn new(state: SharedState) -> Api {
+        Api { state, users: Mutex::<Slab::<User>>::default() }
     }
-}
 
-// /api/collection/:coll/item/:item
-async fn get_item(
-    Path((coll, item)): Path<(String, String)>,
-    Extension(state): Extension<SharedState>,
-) -> Result<JsonResponse, StatusCode> {
-    let coll = state
-        .config
-        .collections
-        .iter()
-        .find(|c| coll == c.name);
-    println!("get_item: coll: {:?}", coll.map(|c| &c.name));
+    /// List collections.
+    #[oai(path = "/collections", method = "get", tag = "ApiTags::Collection")]
+    async fn get_collections(&self) -> GetCollectionsResponse {
+        GetCollectionsResponse::Ok(Json(&self.state.config.collections))
+    }
 
-    if let Some(coll) = coll {
-        println!("get_item: {}", item);
-        if let Some(item) = coll.get_item(&item).await {
-            return  Ok(to_json(&*item));
+    /// Create a new user
+    #[oai(path = "/users", method = "post", tag = "ApiTags::User")]
+    async fn create_user(&self, user: Json<User>) -> CreateUserResponse {
+        let mut users = self.users.lock().await;
+        let id = users.insert(user.0) as i64;
+        CreateUserResponse::Ok(Json(id))
+    }
+
+    /// Find user by id
+    #[oai(path = "/users/:user_id", method = "get", tag = "ApiTags::User")]
+    async fn find_user(&self, user_id: Path<i64>) -> FindUserResponse {
+        let users = self.users.lock().await;
+        match users.get(user_id.0 as usize) {
+            Some(user) => FindUserResponse::Ok(Json(user.clone())),
+            None => FindUserResponse::NotFound,
         }
     }
-    Err(StatusCode::NOT_FOUND)
-}
 
-pub fn routes() -> Router {
-    Router::new()
-        .route("/collections", get(get_collections))
-        .route("/collection/:coll", get(get_collection))
-        .route("/collection/:coll/genres", get(get_genres))
-        .route("/collection/:coll/items", get(get_items))
-        .route("/collection/:coll/item/:item", get(get_item))
-}
+    /// Delete user by id
+    #[oai(path = "/users/:user_id", method = "delete", tag = "ApiTags::User")]
+    async fn delete_user(&self, user_id: Path<i64>) -> DeleteUserResponse {
+        let mut users = self.users.lock().await;
+        let user_id = user_id.0 as usize;
+        if users.contains(user_id) {
+            users.remove(user_id);
+            DeleteUserResponse::Ok
+        } else {
+            DeleteUserResponse::NotFound
+        }
+    }
 
+    /// Update user by id
+    #[oai(path = "/users/:user_id", method = "put", tag = "ApiTags::User")]
+    async fn put_user(&self, user_id: Path<i64>, update: Json<UpdateUser>) -> UpdateUserResponse {
+        let mut users = self.users.lock().await;
+        match users.get_mut(user_id.0 as usize) {
+            Some(user) => {
+                if let Some(name) = update.0.name {
+                    user.name = name;
+                }
+                if let Some(password) = update.0.password {
+                    user.password = password;
+                }
+                UpdateUserResponse::Ok
+            }
+            None => UpdateUserResponse::NotFound,
+        }
+    }
+}

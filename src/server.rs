@@ -10,8 +10,9 @@ use poem::{
     Endpoint, EndpointExt, Result, Request, Response, IntoResponse,
     Route, Server,
 };
+use poem_openapi::OpenApiService;
 
-// use crate::api;
+use crate::api::Api;
 // use crate::data;
 use crate::db::DbHandle;
 use crate::config::Config;
@@ -77,9 +78,15 @@ pub async fn serve(cfg: Config, db: DbHandle) -> anyhow::Result<()> {
     }
 
     let state = SharedState{ db, config: Arc::new(cfg) };
+
+    let api_service =
+        OpenApiService::new(Api::new(state), "Users", "1.0")
+            .server("https://mx2.high5.nl:3001/api");
+    let ui = api_service.rapidoc();
+
     let app = Route::new()
-        .at("/", get(index))
-        .with(AddData::new(state))
+        .nest("/api", api_service)
+        .nest("/", ui)
         .around(log);
 
     Server::new(listener).run(app).await?;
