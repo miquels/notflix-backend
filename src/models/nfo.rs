@@ -1,4 +1,5 @@
 use serde::{Serialize, Deserialize};
+use poem_openapi::Object;
 use super::is_default;
 use super::{Rating, UniqueId, Actor};
 
@@ -7,40 +8,54 @@ use super::{Rating, UniqueId, Actor};
 pub struct NfoBase {
     // Basic NFO
     #[serde(skip_serializing_if = "is_default")]
+    // #[oai(skip_serializing_if = "is_default")]
     pub title: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
+    // #[oai(skip_serializing_if = "is_default")]
     pub plot: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
+    // #[oai(skip_serializing_if = "is_default")]
     pub tagline: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
+    // #[oai(flatten, skip_serializing_if = "is_default")]
     pub ratings: sqlx::types::Json<Vec<Rating>>,
     #[serde(skip_serializing_if = "is_default")]
+    // #[oai(flatten, skip_serializing_if = "is_default")]
     pub uniqueids: sqlx::types::Json<Vec<UniqueId>>,
     #[serde(skip_serializing_if = "is_default")]
+    // #[oai(flatten, skip_serializing_if = "is_default")]
     pub actors: sqlx::types::Json<Vec<Actor>>,
     #[serde(skip_serializing_if = "is_default")]
+    // #[oai(flatten, skip_serializing_if = "is_default")]
     pub credits: sqlx::types::Json<Vec<String>>,
     #[serde(skip_serializing_if = "is_default")]
+    // #[oai(flatten, skip_serializing_if = "is_default")]
     pub directors: sqlx::types::Json<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug, sqlx::FromRow)]
-#[serde(default)]
 pub struct NfoMovie {
     // Detail NFO (Movie + TV Show)
     #[serde(skip_serializing_if = "is_default")]
+    // #[oai(skip_serializing_if = "is_default")]
     pub originaltitle: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
+    // #[oai(skip_serializing_if = "is_default")]
     pub sorttitle: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
+    // #[oai(flatten, skip_serializing_if = "is_default")]
     pub countries: sqlx::types::Json<Vec<String>>,
     #[serde(skip_serializing_if = "is_default")]
+    // #[oai(flatten, skip_serializing_if = "is_default")]
     pub genres: sqlx::types::Json<Vec<String>>,
     #[serde(skip_serializing_if = "is_default")]
+    // #[oai(flatten, skip_serializing_if = "is_default")]
     pub studios: sqlx::types::Json<Vec<String>>,
     #[serde(skip_serializing_if = "is_default")]
+    // #[oai(skip_serializing_if = "is_default")]
     pub premiered: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
+    // #[oai(skip_serializing_if = "is_default")]
     pub mpaa: Option<String>,
 }
 
@@ -48,11 +63,20 @@ pub struct NfoMovie {
 // So we use query! instead, and then use this macro to copy the
 // result from query! into Movie / TVShow / Episode.
 macro_rules! build_struct {
+    (@E $e:expr, 0) => {
+        $e.0
+    };
     (@E $e:expr) => {
         $e
     };
     (@E $($tt:tt)*) => {
         compile_error!(stringify!("build_struct: @E:" $($tt)*));
+    };
+    (@V $src:tt, $left:tt.$right:tt.0) => {
+        build_struct!(@E $src.$right,0)
+    };
+    (@V $src:tt, $left:tt.0) => {
+        build_struct!(@E $src.$left,0)
     };
     (@V $src:tt, $left:tt.$right:tt) => {
         build_struct!(@E $src.$right)

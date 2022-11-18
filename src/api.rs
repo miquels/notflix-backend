@@ -36,8 +36,17 @@ impl Api {
 
     /// List collections.
     #[oai(path = "/collections", method = "get", tag = "ApiTags::Collection")]
-    async fn get_collections(&self) -> GetCollectionsResponse {
-        GetCollectionsResponse::Ok(Json(&self.state.config.collections))
+    async fn api_get_collections(&self) -> GetCollectionsResponse {
+        self.get_collections().await
+    }
+
+    /// Get all items of a collection in order to build a thumbwall.
+    #[oai(path = "/collection/:collection_id/thumbs", method = "get", tag = "ApiTags::Collection")]
+    async fn api_get_thumbs(&self, collection_id: Path<i64>) -> GetThumbsResponse {
+        match self.get_thumbs(collection_id.0).await {
+            Ok(resp) => resp,
+            Err(_) => GetThumbsResponse::InternalServerError,
+        }
     }
 
     /// Create a new user

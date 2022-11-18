@@ -1,3 +1,4 @@
+mod mediainfo;
 mod movie;
 mod tvshow;
 mod episode;
@@ -6,6 +7,7 @@ mod nfo;
 mod fileinfo;
 mod uniqueids;
 
+pub use mediainfo::MediaInfo;
 pub use movie::Movie;
 pub use tvshow::{TVShow, Season};
 pub use episode::Episode;

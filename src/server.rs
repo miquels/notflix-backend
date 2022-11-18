@@ -4,9 +4,8 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::Context;
 use poem::{
-    get, handler,
+    handler,
     listener::{Listener, RustlsCertificate, RustlsConfig, TcpListener},
-    middleware::AddData,
     Endpoint, EndpointExt, Result, Request, Response, IntoResponse,
     Route, Server,
 };

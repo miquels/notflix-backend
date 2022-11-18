@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use sqlx::sqlite::SqlitePool;
 
 use crate::collections::Collection;
-use crate::models::{Movie, TVShow, MediaItem, UniqueId, UniqueIds};
+use crate::models::{MediaItem, Movie, TVShow, UniqueId, UniqueIds};
 use crate::kodifs::{KodiFS, scandirs};
 
 pub type DbHandle = SqlitePool;
