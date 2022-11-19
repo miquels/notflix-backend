@@ -2,6 +2,8 @@ use std::os::unix::fs::MetadataExt;
 use std::time::SystemTime;
 use serde::{Deserialize, Serialize};
 
+use crate::sqlx::impl_sqlx_traits_for;
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct FileInfo {
     pub path:   String,
@@ -11,6 +13,7 @@ pub struct FileInfo {
     #[serde(skip)]
     pub fullpath: String,
 }
+impl_sqlx_traits_for!(FileInfo);
 
 impl std::default::Default for FileInfo {
     fn default() -> FileInfo {

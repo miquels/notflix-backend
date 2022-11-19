@@ -55,7 +55,7 @@ impl Show {
 
     async fn show_read_nfo(&mut self) -> bool {
         let (mut file, nfofile) = match FileInfo::open(&self.basedir, "tvshow.nfo").await {
-            Ok(x) => (x.0, Some(sqlx::types::Json(x.1))),
+            Ok(x) => (x.0, Some(x.1)),
             Err(_) => return false,
         };
         if self.tvshow.nfofile == nfofile {
@@ -194,7 +194,7 @@ impl Show {
             }
             item.set_lastmodified(0);
         }
-        item.tvshow.directory = sqlx::types::Json(fileinfo);
+        item.tvshow.directory = fileinfo;
 
         if nfo_only {
             return item.show_read_nfo().await.then(|| item.tvshow);
@@ -220,7 +220,7 @@ impl Show {
 
         // remove episodes without video, then sort.
         for season_idx in 0 .. item.seasons.len() {
-            item.seasons[season_idx].episodes.retain(|e| e.video.0.path != "" && !e.deleted);
+            item.seasons[season_idx].episodes.retain(|e| e.video.path != "" && !e.deleted);
             item.seasons[season_idx].episodes.sort_by_key(|e| e.episode);
         }
 
@@ -242,7 +242,7 @@ impl Show {
 
         // If we have an NFO and at least one image, accept it.
         let mut ok = false;
-        if item.tvshow.nfofile.is_some() && item.tvshow.thumbs.0.len() > 0 {
+        if item.tvshow.nfofile.is_some() && item.tvshow.thumbs.len() > 0 {
             ok = true;
         }
 

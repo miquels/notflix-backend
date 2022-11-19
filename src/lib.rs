@@ -11,3 +11,5 @@ pub mod kodifs;
 pub mod models;
 pub mod server;
 pub mod util;
+pub mod sqlx;
+pub mod jvec;

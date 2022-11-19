@@ -1,46 +1,49 @@
 use anyhow::Result;
 use serde::Serialize;
+use poem_openapi::Object;
+
 use crate::db::{self, FindItemBy};
+use crate::jvec::JVec;
 use super::nfo::build_struct;
 use super::{Rating, Thumb, UniqueId, Actor};
-use super::{NfoBase, NfoMovie, FileInfo, J, JV, is_default};
+use super::{NfoBase, NfoMovie, FileInfo, is_default};
 
-#[derive(Serialize, Clone, Default, Debug, sqlx::FromRow)]
+#[derive(Object, Serialize, Clone, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
 pub struct Movie {
     // Common.
     pub id: i64,
     pub collection_id: i64,
-    #[serde(skip_serializing)]
-    pub directory: sqlx::types::Json<FileInfo>,
-    #[serde(skip)]
+    #[oai(skip)]
+    pub directory: FileInfo,
+    #[oai(skip)]
     pub deleted: bool,
-    #[serde(skip)]
+    #[oai(skip)]
     pub lastmodified: i64,
-    #[serde(skip_serializing)]
+    #[oai(skip)]
     pub dateadded: Option<String>,
-    #[serde(skip_serializing)]
-    pub nfofile: Option<sqlx::types::Json<FileInfo>>,
+    #[oai(skip)]
+    pub nfofile: Option<FileInfo>,
 
     // Common, from filesystem scan.
-    #[serde(skip_serializing_if = "is_default")]
-    pub thumbs: sqlx::types::Json<Vec<Thumb>>,
+    #[oai(skip_serializing_if = "is_default")]
+    pub thumbs: JVec<Thumb>,
 
     // Common NFO
-    #[serde(flatten)]
+    #[oai(flatten)]
     pub nfo_base: NfoBase,
 
     // Movie + TVShow NFO
-    #[serde(flatten)]
+    #[oai(flatten)]
     pub nfo_movie: NfoMovie,
 
     // Movie NFO
-    #[serde(skip_serializing_if = "is_default")]
+    #[oai(skip_serializing_if = "is_default")]
     pub runtime: Option<u32>,
 
     // Movie specific data.
-    #[serde(skip_serializing)]
-    pub video: sqlx::types::Json<FileInfo>,
+    #[oai(skip)]
+    pub video: FileInfo,
 }
 
 impl Movie {
@@ -56,27 +59,27 @@ impl Movie {
             r#"
                 SELECT i.id AS "id: i64",
                        i.collection_id AS "collection_id: i64",
-                       i.directory AS "directory!: J<FileInfo>",
+                       i.directory AS "directory!: FileInfo",
                        i.deleted AS "deleted!: bool",
                        i.lastmodified,
                        i.dateadded,
-                       i.nfofile AS "nfofile?: J<FileInfo>",
-                       i.thumbs AS "thumbs!: JV<Thumb>",
+                       i.nfofile AS "nfofile?: FileInfo",
+                       i.thumbs AS "thumbs!: JVec<Thumb>",
                        i.title, i.plot, i.tagline,
-                       i.ratings AS "ratings!: JV<Rating>",
-                       i.uniqueids AS "uniqueids!: JV<UniqueId>",
-                       i.actors AS "actors!: JV<Actor>",
-                       i.credits AS "credits!: JV<String>",
-                       i.directors AS "directors!: JV<String>",
+                       i.ratings AS "ratings!: JVec<Rating>",
+                       i.uniqueids AS "uniqueids!: JVec<UniqueId>",
+                       i.actors AS "actors!: JVec<Actor>",
+                       i.credits AS "credits!: JVec<String>",
+                       i.directors AS "directors!: JVec<String>",
                        m.originaltitle,
                        m.sorttitle,
-                       m.countries AS "countries!: JV<String>",
-                       m.genres AS "genres!: JV<String>",
-                       m.studios AS "studios!: JV<String>",
+                       m.countries AS "countries!: JVec<String>",
+                       m.genres AS "genres!: JVec<String>",
+                       m.studios AS "studios!: JVec<String>",
                        m.premiered,
                        m.mpaa,
                        m.runtime AS "runtime: u32",
-                       m.video AS "video: J<FileInfo>"
+                       m.video AS "video: FileInfo"
                 FROM mediaitems i
                 JOIN movies m ON (m.mediaitem_id = i.id)
                 WHERE i.id = ? AND (i.deleted = 0 OR i.deleted = ?)"#,

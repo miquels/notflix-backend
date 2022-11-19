@@ -40,5 +40,4 @@ macro_rules! impl_sqlx_traits_for {
         }
     };
 }
-
-impl_sqlx_traits_for!(models::FileInfo);
+pub(crate) use impl_sqlx_traits_for;

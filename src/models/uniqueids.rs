@@ -1,12 +1,16 @@
 use anyhow::Result;
+use serde::{Serialize, Deserialize};
+use poem_openapi::Object;
 
 use crate::db;
 use crate::models::UniqueId;
+use crate::sqlx::impl_sqlx_traits_for;
 
-#[derive(Clone, Default, Debug, PartialEq)]
+#[derive(Object, Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
 pub struct UniqueIds {
     pub mediaitem_id: i64,
 }
+impl_sqlx_traits_for!(UniqueIds);
 
 impl UniqueIds {
     pub fn new(mediaitem_id: i64) -> UniqueIds {

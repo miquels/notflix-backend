@@ -15,6 +15,7 @@ use scan_fmt::scan_fmt;
 use serde::{de, Deserialize, Serialize};
 use serde_xml_rs::from_str;
 
+use crate::jvec::JVec;
 use crate::models::{self, NfoBase, NfoMovie};
 
 /// Thumbnail
@@ -362,11 +363,11 @@ impl Nfo {
             title: self.title.clone(),
             plot: self.plot.clone(),
             tagline: self.tagline.clone(),
-            ratings: sqlx::types::Json(ratings.clone()),
-            uniqueids: sqlx::types::Json(uniqueids.clone()),
-            actors: sqlx::types::Json(actors.clone()),
-            credits: sqlx::types::Json(self.credits.clone()),
-            directors: sqlx::types::Json(self.director.clone()),
+            ratings: JVec(ratings),
+            uniqueids: JVec(uniqueids),
+            actors: JVec(actors),
+            credits: JVec(self.credits.clone()),
+            directors: JVec(self.director.clone()),
         }
     }
 
@@ -388,9 +389,9 @@ impl Nfo {
         NfoMovie {
             originaltitle: self.originaltitle.clone(),
             sorttitle: self.sorttitle.clone(),
-            countries: sqlx::types::Json(self.country.clone()),
-            genres: sqlx::types::Json(self.genre.clone()),
-            studios: sqlx::types::Json(self.studio.clone()),
+            countries: JVec(self.country.clone()),
+            genres: JVec(self.genre.clone()),
+            studios: JVec(self.studio.clone()),
             premiered,
             mpaa: self.mpaa.clone(),
         }

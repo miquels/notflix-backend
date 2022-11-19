@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
+use poem_openapi::Object;
 
 use super::is_default;
+use crate::sqlx::impl_sqlx_traits_for;
 
-#[derive(Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
+#[derive(Object, Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
 #[serde(default)]
 pub struct Actor {
     #[serde(skip_serializing_if = "is_default")]
@@ -16,9 +18,10 @@ pub struct Actor {
     #[serde(skip_serializing_if = "is_default")]
     pub thumb_url:  Option<String>,
 }
+impl_sqlx_traits_for!(Actor);
 
 /// Image
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[derive(Object, Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default)]
 pub struct Thumb {
     #[serde(rename(deserialize = "$value"))]
@@ -27,10 +30,12 @@ pub struct Thumb {
     #[serde(skip_serializing_if = "is_default")]
     pub season:  Option<String>,
     #[serde(skip)]
+    #[oai(skip)]
     pub state: ThumbState,
 }
+impl_sqlx_traits_for!(Thumb);
 
-#[derive(Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
+#[derive(Object, Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
 #[serde(default)]
 pub struct Rating {
     #[serde(skip_serializing_if = "is_default")]
@@ -44,8 +49,9 @@ pub struct Rating {
     #[serde(skip_serializing_if = "is_default")]
     pub votes:    Option<u32>,
 }
+impl_sqlx_traits_for!(Rating);
 
-#[derive(Deserialize, Serialize, Clone, Default, Debug, PartialEq, sqlx::FromRow)]
+#[derive(Object, Deserialize, Serialize, Clone, Default, Debug, PartialEq, sqlx::FromRow)]
 #[serde(default)]
 pub struct UniqueId {
     #[serde(rename = "type")]
@@ -53,6 +59,7 @@ pub struct UniqueId {
     pub default: bool,
     pub id: String,
 }
+impl_sqlx_traits_for!(UniqueId);
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub enum ThumbState {

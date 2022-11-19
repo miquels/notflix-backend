@@ -21,7 +21,7 @@ impl Episode {
 
         // Must be able to open it.
         let video = match FileInfo::from_path(&showdir, name).await {
-            Ok(v) => sqlx::types::Json(v),
+            Ok(v) => v,
             Err(_) => return None,
         };
 
@@ -104,7 +104,7 @@ impl Episode {
             match FileInfo::open(&self.showdir, &name).await {
                 Ok((mut file, nfofile)) => {
 
-                    let mut nfofile = Some(sqlx::types::Json(nfofile));
+                    let mut nfofile = Some(nfofile);
                     if self.episode.nfofile == nfofile {
                         // No change.
                         nfofile = None;

@@ -37,7 +37,7 @@ pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<
     // Initial Movie.
     let mut movie = dbent.unwrap_or_else(|| Box::new(Movie {
         collection_id: coll.collection_id as i64,
-        video: sqlx::types::Json(video),
+        video: video,
         ..Movie::default()
     }));
     movie.lastmodified = newest;
@@ -54,7 +54,7 @@ pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<
         }
         movie.lastmodified = SystemTime::now().unixtime_ms();
     }
-    movie.directory = sqlx::types::Json(dirinfo);
+    movie.directory = dirinfo;
 
     // If the directory name ends with <space>(YYYY) then it's a year.
     // Remember that year as backup in case there's no NFO file.
@@ -89,7 +89,7 @@ pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<
         // NFO file found. Parse it.
         if ext == "nfo" {
             let (mut file, nfofile) = match FileInfo::open(&dirpath, name).await {
-                Ok((file, fileinfo)) => (file, Some(sqlx::types::Json(fileinfo))),
+                Ok((file, fileinfo)) => (file, Some(fileinfo)),
                 Err(_) => continue,
             };
 

@@ -5,6 +5,7 @@ use url::Url;
 
 use crate::models::{self, Thumb, ThumbState};
 use crate::collections::Collection;
+use crate::jvec::JVec;
 
 mod movie;
 mod tvshow;
@@ -72,7 +73,7 @@ pub fn join_and_escape_path(subdir: Option<&str>, name: &str) -> String {
 // Add a thumb to a Vec of Thumbs.
 // If the thumb was already present, we change nothing and return `false` (no update).
 // If the thumb was _not_ already present, we return `true` (updated).
-fn add_thumb(thumbs: &mut sqlx::types::Json<Vec<Thumb>>, _dir: &str, name: impl Into<String>, aspect: impl Into<String>, season: Option<&str>) -> bool {
+fn add_thumb(thumbs: &mut JVec<Thumb>, _dir: &str, name: impl Into<String>, aspect: impl Into<String>, season: Option<&str>) -> bool {
     let name = name.into();
     let aspect = aspect.into();
 

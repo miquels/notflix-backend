@@ -1,52 +1,54 @@
 use anyhow::Result;
 use serde::Serialize;
 use futures_util::TryStreamExt;
+use poem_openapi::Object;
 
 use crate::db;
+use crate::jvec::JVec;
 use super::nfo::build_struct;
 use super::{Rating, Thumb, UniqueId, Actor};
-use super::{J, JV, FileInfo, NfoBase, is_default};
+use super::{FileInfo, NfoBase, is_default};
 
-#[derive(Serialize, serde::Deserialize, Clone, Default, Debug, sqlx::FromRow)]
+#[derive(Object, Serialize, serde::Deserialize, Clone, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
 pub struct Episode {
     // Common.
     pub id: i64,
-    #[serde(skip_serializing)]
+    #[oai(skip)]
     pub collection_id: i64,
     pub tvshow_id: i64,
-    #[serde(skip_serializing)]
-    pub directory: sqlx::types::Json<FileInfo>,
-    #[serde(skip_serializing)]
+    #[oai(skip)]
+    pub directory: FileInfo,
+    #[oai(skip)]
     pub deleted: bool,
-    #[serde(skip)]
+    #[oai(skip)]
     pub lastmodified: i64,
-    #[serde(skip_serializing_if = "is_default")]
+    #[oai(skip_serializing_if = "is_default")]
     pub dateadded: Option<String>,
-    #[serde(skip_serializing)]
-    pub nfofile: Option<sqlx::types::Json<FileInfo>>,
+    #[oai(skip)]
+    pub nfofile: Option<FileInfo>,
 
     // Common, from filesystem scan.
-    #[serde(skip_serializing_if = "is_default")]
-    pub thumbs: sqlx::types::Json<Vec<Thumb>>,
+    #[oai(skip_serializing_if = "is_default")]
+    pub thumbs: JVec<Thumb>,
 
     // Common NFO.
-    #[serde(flatten)]
+    #[oai(flatten)]
     pub nfo_base: NfoBase,
 
     // Detail NFO (Episodes)
-    #[serde(skip_serializing_if = "is_default")]
+    #[oai(skip_serializing_if = "is_default")]
     pub aired: Option<String>,
-    #[serde(skip_serializing_if = "is_default")]
+    #[oai(skip_serializing_if = "is_default")]
     pub runtime: Option<u32>,
-    #[serde(skip_serializing_if = "is_default")]
+    #[oai(skip_serializing_if = "is_default")]
     pub displayseason: Option<u32>,
-    #[serde(skip_serializing_if = "is_default")]
+    #[oai(skip_serializing_if = "is_default")]
     pub displayepisode: Option<u32>,
 
     // Episode
-    #[serde(skip_serializing)]
-    pub video: sqlx::types::Json<FileInfo>,
+    #[oai(skip)]
+    pub video: FileInfo,
     pub season: u32,
     pub episode: u32,
 }
@@ -62,20 +64,20 @@ impl Episode {
             r#"
                 SELECT i.id AS "id: i64",
                        i.collection_id AS "collection_id: i64",
-                       i.directory AS "directory!: J<FileInfo>",
+                       i.directory AS "directory!: FileInfo",
                        i.deleted AS "deleted!: bool",
                        i.lastmodified,
                        i.dateadded,
-                       i.nfofile AS "nfofile?: J<FileInfo>",
-                       i.thumbs AS "thumbs!: JV<Thumb>",
+                       i.nfofile AS "nfofile?: FileInfo",
+                       i.thumbs AS "thumbs!: JVec<Thumb>",
                        i.title, i.plot, i.tagline,
-                       i.ratings AS "ratings!: JV<Rating>",
-                       i.uniqueids AS "uniqueids!: JV<UniqueId>",
-                       i.actors AS "actors!: JV<Actor>",
-                       i.credits AS "credits!: JV<String>",
-                       i.directors AS "directors!: JV<String>",
+                       i.ratings AS "ratings!: JVec<Rating>",
+                       i.uniqueids AS "uniqueids!: JVec<UniqueId>",
+                       i.actors AS "actors!: JVec<Actor>",
+                       i.credits AS "credits!: JVec<String>",
+                       i.directors AS "directors!: JVec<String>",
                        m.tvshow_id,
-                       m.video AS "video!: J<FileInfo>",
+                       m.video AS "video!: FileInfo",
                        m.season AS "season: u32",
                        m.episode AS "episode: u32",
                        m.aired,
