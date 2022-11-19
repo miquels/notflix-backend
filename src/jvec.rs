@@ -1,26 +1,23 @@
-use std::borrow::Cow;
 use std::ops::{Deref, DerefMut};
 
-use poem::web::Field as PoemField;
-use serde_json::Value;
-
-use poem_openapi::{
-    registry::{MetaSchema, MetaSchemaRef, Registry},
-    types::{
-        ParseError, ParseFromJSON, ParseFromMultipartField, ParseFromParameter, ParseResult,
-        ToJSON, Type,
-    },
-};
-
+///
+/// JVec<T> is a transparent wrapper for Vec<T>.
+///
+/// It implements the `sqlx` Encode/Decode traits so that it can be retrieved
+/// from the database or stored in the database as JSON, and it also implements
+/// the `poem_openapi` traits that are normally implemented by `derive(Object)`.
+///
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Default, Debug)]
 #[serde(transparent)]
 pub struct JVec<T>(pub Vec<T>);
 
 impl<T> JVec<T> {
+    /// Constructs a new, empty `Vec<T>`.
     pub fn new() -> JVec<T> {
         JVec(Vec::new())
     }
 
+    /// Constructs a new, empty `Vec<T>` with at least the specified capacity.
     pub fn with_capacity(cap: usize) -> JVec<T> {
         JVec(Vec::with_capacity(cap))
     }
@@ -51,6 +48,69 @@ impl<T> AsMut<JVec<T>> for JVec<T> {
         self
     }
 }
+
+//
+// Implementation of `sqlx` traits, so that the type gets
+// encoded/decodec in JSON to/from the dabase.
+//
+// Mostly copied from
+// https://github.com/launchbadge/sqlx/blob/main/sqlx-core/src/sqlite/types/str.rs
+//
+impl<'r, DB: sqlx::Database, T> sqlx::Decode<'r, DB> for JVec<T>
+where
+    &'r str: sqlx::Decode<'r, DB>,
+    T: serde::Deserialize<'r>
+{
+    fn decode(
+        value: <DB as sqlx::database::HasValueRef<'r>>::ValueRef,
+    ) -> Result<JVec<T>, Box<dyn std::error::Error + 'static + Send + Sync>> {
+        let value = <&str as sqlx::Decode<DB>>::decode(value)?;
+        Ok(serde_json::from_str(value)?)
+    }
+}
+
+impl<'q, T> sqlx::Encode<'q, sqlx::Sqlite> for JVec<T>
+where
+    T: serde::Serialize,
+{
+    fn encode(self, args: &mut Vec<sqlx::sqlite::SqliteArgumentValue<'q>>) -> sqlx::encode::IsNull {
+        self.encode_by_ref(args)
+    }
+
+    fn encode_by_ref(&self, args: &mut Vec<sqlx::sqlite::SqliteArgumentValue<'q>>) -> sqlx::encode::IsNull {
+        let json = serde_json::to_string(self).unwrap_or(String::from(
+                r#"{"error":"failed to encode"}"#
+        ));
+        args.push(sqlx::sqlite::SqliteArgumentValue::Text(std::borrow::Cow::Owned(json)));
+
+        sqlx::encode::IsNull::No
+    }
+}
+
+impl<T> sqlx::Type<sqlx::Sqlite> for JVec<T> {
+    fn type_info() -> sqlx::sqlite::SqliteTypeInfo {
+        String::type_info()
+    }
+}
+
+//
+// Implementation of `poem_openapi` traits. Normally you'd just slap 
+// #derive(Object>` on the JVec<T> type, but the derive macro doesn't
+// understand generics so we have to implement the traits manually.
+//
+// Mostly copied
+// from https://github.com/poem-web/poem/blob/master/poem-openapi/src/types/external/vec.rs
+//
+use std::borrow::Cow;
+use poem::web::Field as PoemField;
+use serde_json::Value;
+use poem_openapi::{
+    registry::{MetaSchema, MetaSchemaRef, Registry},
+    types::{
+        ParseError, ParseFromJSON, ParseFromMultipartField, ParseFromParameter, ParseResult,
+        ToJSON, Type,
+    },
+};
 
 impl<T: Type> Type for JVec<T> {
     const IS_REQUIRED: bool = true;
@@ -167,42 +227,5 @@ mod tests {
     fn parse_from_parameters() {
         let values = JVec::<i32>::parse_from_parameters(vec!["100", "200", "300"]).unwrap();
         assert_eq!(values, vec![100, 200, 300]);
-    }
-}
-
-impl<'r, DB: sqlx::Database, T> sqlx::Decode<'r, DB> for JVec<T>
-where
-    &'r str: sqlx::Decode<'r, DB>,
-    T: serde::Deserialize<'r>
-{
-    fn decode(
-        value: <DB as sqlx::database::HasValueRef<'r>>::ValueRef,
-    ) -> Result<JVec<T>, Box<dyn std::error::Error + 'static + Send + Sync>> {
-        let value = <&str as sqlx::Decode<DB>>::decode(value)?;
-        Ok(serde_json::from_str(value)?)
-    }
-}
-
-impl<'q, T> sqlx::Encode<'q, sqlx::Sqlite> for JVec<T>
-where
-    T: serde::Serialize,
-{
-    fn encode(self, args: &mut Vec<sqlx::sqlite::SqliteArgumentValue<'q>>) -> sqlx::encode::IsNull {
-        self.encode_by_ref(args)
-    }
-
-    fn encode_by_ref(&self, args: &mut Vec<sqlx::sqlite::SqliteArgumentValue<'q>>) -> sqlx::encode::IsNull {
-        let json = serde_json::to_string(self).unwrap_or(String::from(
-                r#"{"error":"failed to encode"}"#
-        ));
-        args.push(sqlx::sqlite::SqliteArgumentValue::Text(std::borrow::Cow::Owned(json)));
-
-        sqlx::encode::IsNull::No
-    }
-}
-
-impl<T> sqlx::Type<sqlx::Sqlite> for JVec<T> {
-    fn type_info() -> sqlx::sqlite::SqliteTypeInfo {
-        String::type_info()
     }
 }

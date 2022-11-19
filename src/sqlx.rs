@@ -1,9 +1,5 @@
-// This macro Implements sqlx::Decode, sqlx::Encode, sqlx::Type for any other type
-// so that JSON is used to read/write the type from/to the database.
-//
-// Unfortunately, we cannot implement this for Vec<T> and that would
-// be one of the most useful ones.
-
+/// This macro implements the sqlx::Decode, sqlx::Encode, and sqlx::Type traits
+/// for any type so that JSON is used to read/write the type from/to the database.
 macro_rules! impl_sqlx_traits_for {
     ($ty:ty) => {
         impl<'r, DB: sqlx::Database> sqlx::Decode<'r, DB> for $ty
