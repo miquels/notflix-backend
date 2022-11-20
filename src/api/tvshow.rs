@@ -17,10 +17,6 @@ pub enum GetTVShowResponse {
     /// Return when there are no collections.
     #[oai(status = 404)]
     NotFound,
-
-    /// Return if something went wrong
-    #[oai(status = 500)]
-    InternalServerError,
 }
 
 impl Api {
@@ -30,7 +26,7 @@ impl Api {
             Some(coll) => coll,
             None => return Ok(GetTVShowResponse::NotFound),
         };
-        let mut txn = self.state.db.begin().await?;
+        let mut txn = self.state.db.handle.begin().await?;
         let by = FindItemBy::id(tvshow_id, false);
         match TVShow::lookup_by(&mut txn, &by).await {
             Some(tvshow) => Ok(GetTVShowResponse::Ok(Json(tvshow))),

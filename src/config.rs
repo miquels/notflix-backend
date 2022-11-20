@@ -2,6 +2,7 @@ use std::io;
 use std::net::{AddrParseError, SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::Duration;
 
 use anyhow::Context;
 use serde::Deserialize;
@@ -11,6 +12,7 @@ use crate::collections::Collection;
 #[derive(Deserialize)]
 pub struct Config {
     pub server: Server,
+    pub session: Session,
     #[serde(rename = "collection")]
     pub collections: Vec<Collection>,
 }
@@ -34,6 +36,13 @@ pub struct Server {
     pub addrs: Vec<SocketAddr>,
     #[serde(default, skip)]
     pub tls_addrs: Vec<SocketAddr>,
+}
+
+#[derive(Deserialize)]
+pub struct Session {
+    #[serde(default)]
+    #[serde(with = "humantime_serde")]
+    pub timeout: Option<Duration>,
 }
 
 pub fn from_file(path: &str) -> anyhow::Result<Config> {

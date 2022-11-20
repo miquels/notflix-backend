@@ -26,7 +26,7 @@ http = "0.2"
 http-body = "0.4.4"
 log = "0.4.17"
 once_cell = "1.9.0"
-poem = { version = "1.3.48", features = ["server", "rustls"] }
+poem = { version = "1.3.48", features = ["server", "rustls", "anyhow"] }
 poem-openapi = { version = "2.0.19", features = ["swagger-ui", "rapidoc", "email"] }
 regex = "1.5.4"
 scan_fmt = "0.2.6"
@@ -44,6 +44,10 @@ mp4lib = { version = "0.1", features = [], path = "../mp4/mp4lib" }
 async-stream = "0.3.3"
 flume = "0.10.14"
 slab = "0.4.7"
+humantime-serde = "1.1.1"
+serde_plain = "1.0.1"
+sha-crypt = "0.4.0"
+nanoid = "0.4.0"
 
 [build-dependencies]
 anyhow = "1.0"

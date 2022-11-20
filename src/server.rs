@@ -4,30 +4,71 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::Context;
 use poem::{
-    handler,
     listener::{Listener, RustlsCertificate, RustlsConfig, TcpListener},
     Endpoint, EndpointExt, Result, Request, Response, IntoResponse,
     Route, Server,
 };
-use poem_openapi::OpenApiService;
+use poem_openapi::{
+    OpenApiService,
+    auth::ApiKey,
+    SecurityScheme,
+};
 
 use crate::api::Api;
 // use crate::data;
-use crate::db::DbHandle;
+use crate::db::Db;
 use crate::config::Config;
+use crate::models;
+use crate::util::ok_or_return;
 
 #[derive(Clone)]
 pub struct SharedState {
-    pub db: DbHandle,
+    pub db: Db,
     pub config: Arc<Config>,
 }
 
-#[handler]
-fn index() -> String {
-    "hello".to_string()
+/// ApiKey authorization
+#[derive(SecurityScheme)]
+#[oai(
+    type = "api_key",
+    key_name = "X-Session-Id",
+    in = "header",
+    checker = "api_checker"
+)]
+pub struct SessionIdAuthorization(pub models::Session);
+
+async fn api_checker(req: &Request, api_key: ApiKey) -> Option<models::Session> {
+    let state = req.data::<SharedState>().unwrap();
+    let api_key = api_key.key.as_str();
+    let timeout = state.config.session.timeout;
+    println!("api key sent: {:?}", api_key);
+
+    let mut txn = ok_or_return!(state.db.handle.begin().await, |err| {
+        log::error!("api_checker: {}", err);
+        None
+    });
+
+    match models::Session::find(&mut txn, api_key, timeout).await {
+        Ok(Some(session)) => {
+            if txn.commit().await.is_ok() {
+                Some(session)
+            } else {
+                None
+            }
+        },
+        Ok(None) => {
+            let _ = txn.commit().await;
+            None
+        },
+        Err(err) => {
+            let _ = txn.rollback().await;
+            log::error!("api_checker: {}", err);
+            None
+        },
+    }
 }
 
-pub async fn serve(cfg: Config, db: DbHandle) -> anyhow::Result<()> {
+pub async fn serve(cfg: Config, db: Db) -> anyhow::Result<()> {
 
     let mut listeners = Vec::new();
 
@@ -79,14 +120,17 @@ pub async fn serve(cfg: Config, db: DbHandle) -> anyhow::Result<()> {
     let state = SharedState{ db, config: Arc::new(cfg) };
 
     let api_service =
-        OpenApiService::new(Api::new(state), "Notflix", "0.1")
+        OpenApiService::new(Api::new(state.clone()), "Notflix", "0.1")
             .server("https://mx2.high5.nl:3001/api");
     let ui = api_service.rapidoc();
+    // let spec = api_service.spec_endpoint_yaml();
 
     let app = Route::new()
         .nest("/api", api_service)
+        // .nest("/spec", spec)
         .nest("/", ui)
-        .around(log);
+        .around(log)
+        .data(state);
 
     Server::new(listener).run(app).await?;
 
@@ -172,12 +216,14 @@ async fn log<E: Endpoint>(next: E, req: Request) -> Result<Response> {
         },
         Err(err) => {
             println!(
-                "{} {} \"{} {} {:?}\" ERROR: {}",
+                "{} {} \"{} {} {:?}\" {} - {:?} \"{}\"",
                 now.to_rfc3339(),
                 addr,
                 method,
                 pnq,
                 version,
+                err.status().as_u16(),
+                start.elapsed(),
                 err
             );
             Err(err)

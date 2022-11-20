@@ -1,20 +1,24 @@
-mod mediainfo;
-mod movie;
-mod tvshow;
 mod episode;
-mod misc;
-mod nfo;
 mod fileinfo;
+mod mediainfo;
+mod misc;
+mod movie;
+mod nfo;
+mod session;
+mod tvshow;
 mod uniqueids;
+mod user;
 
-pub use mediainfo::MediaInfo;
-pub use movie::Movie;
-pub use tvshow::{TVShow, Season};
 pub use episode::Episode;
 pub use fileinfo::FileInfo;
-pub use uniqueids::UniqueIds;
+pub use mediainfo::MediaInfo;
 pub use misc::*;
+pub use movie::Movie;
 pub use nfo::{NfoBase, NfoMovie};
+pub use session::Session;
+pub use tvshow::{TVShow, Season};
+pub use uniqueids::UniqueIds;
+pub use user::{User, UpdateUser};
 
 use async_trait::async_trait;
 

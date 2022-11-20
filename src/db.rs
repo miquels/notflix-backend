@@ -2,7 +2,7 @@
 ///
 /// This is where we put data scraped from the filesystem into
 /// the database.
-
+///
 use std::collections::HashMap;
 use std::io::ErrorKind;
 
@@ -16,10 +16,7 @@ use crate::kodifs::{KodiFS, scandirs};
 pub type DbHandle = SqlitePool;
 pub type TxnHandle<'a> = sqlx::Transaction<'a, sqlx::Sqlite>;
 
-pub async fn connect_db(db: &str) -> Result<DbHandle> {
-    Ok(SqlitePool::connect(db).await?)
-}
-
+#[derive(Clone)]
 pub struct Db {
     pub handle: DbHandle,
 }

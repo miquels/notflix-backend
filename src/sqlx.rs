@@ -2,6 +2,15 @@
 /// for any type so that JSON is used to read/write the type from/to the database.
 macro_rules! impl_sqlx_traits_for {
     ($ty:ty) => {
+        impl_sqlx_traits_for!($ty, serde_plain);
+    };
+    ($ty:ty, json) => {
+        impl_sqlx_traits_for!($ty, serde_json);
+    };
+    ($ty:ty, text) => {
+        impl_sqlx_traits_for!($ty, serde_plain);
+    };
+    ($ty:ty, $codec:ident) => {
         impl<'r, DB: sqlx::Database> sqlx::Decode<'r, DB> for $ty
         where
             &'r str: sqlx::Decode<'r, DB>
@@ -10,7 +19,7 @@ macro_rules! impl_sqlx_traits_for {
                 value: <DB as sqlx::database::HasValueRef<'r>>::ValueRef,
             ) -> Result<$ty, Box<dyn std::error::Error + 'static + Send + Sync>> {
                 let value = <&str as sqlx::Decode<DB>>::decode(value)?;
-                Ok(serde_json::from_str(value)?)
+                Ok($codec::from_str(value)?)
             }
         }
 
@@ -20,7 +29,7 @@ macro_rules! impl_sqlx_traits_for {
             }
 
             fn encode_by_ref(&self, args: &mut Vec<sqlx::sqlite::SqliteArgumentValue<'q>>) -> sqlx::encode::IsNull {
-                let json = serde_json::to_string(self).unwrap_or(String::from(
+                let json = $codec::to_string(self).unwrap_or(String::from(
                         r#"{"error":"failed to encode"}"#
                 ));
                 args.push(sqlx::sqlite::SqliteArgumentValue::Text(std::borrow::Cow::Owned(json)));

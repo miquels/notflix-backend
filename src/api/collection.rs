@@ -40,18 +40,14 @@ pub enum GetThumbsResponse {
     /// Return when there are no collections.
     #[oai(status = 404)]
     NotFound,
-
-    /// Return if something went wrong
-    #[oai(status = 500)]
-    InternalServerError,
 }
 
 impl Api {
-    pub async fn get_collections(&self) -> GetCollectionsResponse {
+    pub async fn get_collections(&self) -> Result<GetCollectionsResponse> {
         if self.state.config.collections.is_empty() {
-            GetCollectionsResponse::NotFound
+            Ok(GetCollectionsResponse::NotFound)
         } else {
-            GetCollectionsResponse::Ok(Json(&self.state.config.collections))
+            Ok(GetCollectionsResponse::Ok(Json(&self.state.config.collections)))
         }
     }
 
@@ -61,7 +57,7 @@ impl Api {
             Some(coll) => coll,
             None => return Ok(GetThumbsResponse::NotFound),
         };
-        let mut items = models::MediaInfo::get_all(&self.state.db, coll.collection_id as i64).await?;
+        let mut items = models::MediaInfo::get_all(&self.state.db.handle, coll.collection_id as i64).await?;
         let m = items.drain(..).map(|i| {
                 let poster = i.poster.map(|_| format!("/api/images/{}/{}/poster.jpg", collection_id, i.id));
                 MediaItem {

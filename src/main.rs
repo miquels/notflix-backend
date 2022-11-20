@@ -127,7 +127,7 @@ async fn main() -> anyhow::Result<()> {
 async fn serve(opts: ServeOpts) -> anyhow::Result<()> {
     let cfg = config::from_file(&opts.config)?;
 
-    let handle = db::connect_db(&cfg.server.database).await?;
+    let handle = db::Db::connect(&cfg.server.database).await?;
     server::serve(cfg, handle).await?;
     Ok(())
 }

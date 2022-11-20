@@ -140,6 +140,7 @@ CREATE TABLE uniqueids(
 );
 CREATE UNIQUE INDEX uniqueids_idx ON uniqueids(idtype, uniqueid);
 
+/*
 CREATE TABLE actors_in_item(
   id INTEGER PRIMARY KEY,
   mediaitem_id INTEGER NOT NULL,
@@ -151,14 +152,21 @@ CREATE TABLE actors_in_item(
 
   FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
 );
-
-/*
-CREATE TABLE genres(
-);
-
-CREATE TABLE actors(
-);
-
-CREATE TABLE genres(
-);
 */
+
+CREATE TABLE users(
+  id INTEGER PRIMARY KEY,
+  username TEXT NOT NULL,
+  password TEXT NOT NULL,
+  email TEXT
+);
+
+CREATE TABLE sessions(
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  sessionid TEXT NOT NULL,
+  timestamp TEXT NOT NULL,
+  data TEXT,
+
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
