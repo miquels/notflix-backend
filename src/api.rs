@@ -109,7 +109,7 @@ impl Api {
     }
 
     /// Get all users.
-    #[oai(path = "/users/all", method = "get", tag = "ApiTags::User")]
+    #[oai(path = "/users", method = "get", tag = "ApiTags::User")]
     async fn api_get_users(&self, session: Session) -> Result<GetUsersResponse> {
        let res = self.get_users(session).await?;
        Ok(res)

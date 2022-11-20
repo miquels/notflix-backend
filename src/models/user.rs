@@ -99,6 +99,18 @@ impl User {
 
 impl UpdateUser {
     pub async fn update(&self, txn: &mut db::TxnHandle<'_>) -> Result<bool> {
+        let hashed = match self.password.as_ref() {
+            Some(password) => {
+                let params = ok_or_return!(Sha512Params::new(10_000), |_| {
+                    bail!("unexpected error in sha_crypt::Sha512Params::new");
+                });
+                let hashed = ok_or_return!(sha512_simple(password, &params), |_| {
+                    bail!("unexpected error in sha-crypt::sha512_simple");
+                });
+                Some(hashed)
+            },
+            None => None,
+        };
         let mut sql = "UPDATE users SET ".to_string();
         let mut args: Vec<&str> = Vec::new();
         if self.username.is_some() {
@@ -117,8 +129,8 @@ impl UpdateUser {
         if let Some(username) = self.username.as_ref() {
             q = q.bind(username);
         }
-        if let Some(password) = self.password.as_ref() {
-            q = q.bind(password);
+        if let Some(hashed) = hashed.as_ref() {
+            q = q.bind(hashed);
         }
         if let Some(email) = self.email.as_ref() {
             q = q.bind(email);

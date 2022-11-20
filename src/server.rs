@@ -41,7 +41,7 @@ async fn api_checker(req: &Request, api_key: ApiKey) -> Option<models::Session> 
     let state = req.data::<SharedState>().unwrap();
     let api_key = api_key.key.as_str();
     let timeout = state.config.session.timeout;
-    println!("api key sent: {:?}", api_key);
+    // println!("api key sent: {:?}", api_key);
 
     let mut txn = ok_or_return!(state.db.handle.begin().await, |err| {
         log::error!("api_checker: {}", err);
