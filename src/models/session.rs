@@ -1,4 +1,4 @@
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 use anyhow::Result;
 
 use crate::db;
@@ -26,10 +26,11 @@ impl Session {
 
         sqlx::query!(
             r#"
-                INSERT INTO sessions(user_id, sessionid, timestamp)
-                VALUES(?, ?, ?)"#,
+                INSERT INTO sessions(user_id, sessionid, created, updated)
+                VALUES(?, ?, ?, ?)"#,
             user_id,
             sessionid,
+            now,
             now,
         )
         .execute(&mut *txn)
@@ -50,7 +51,7 @@ impl Session {
                     u.username AS "username",
                     s.user_id AS "user_id",
                     s.sessionid AS "sessionid",
-                    s.timestamp AS "timestamp: Rfc3339Time"
+                    s.updated AS "updated: Rfc3339Time"
                 FROM sessions s, users u
                 WHERE s.user_id = u.id AND s.sessionid = ?"#,
             session_id
@@ -65,7 +66,7 @@ impl Session {
 
         if let Some(timeout) = timeout {
             let now = SystemTime::now();
-            if *s.timestamp.as_systemtime() + timeout < now {
+            if s.updated.as_systemtime() + timeout < now {
                 sqlx::query!(
                     r#"
                         DELETE FROM sessions WHERE sessionid = ?"#,
@@ -73,8 +74,23 @@ impl Session {
                 )
                 .execute(&mut *txn)
                 .await?;
-                log::info!("find_session: session {} for {}: timeout ({})", s.sessionid, s.username, s.timestamp);
+                log::info!("find_session: session {} for {}: timeout ({})", s.sessionid, s.username, s.updated);
                 return Ok(None);
+            }
+        }
+
+        let now = SystemTime::now();
+        if let Ok(d) = now.duration_since(s.updated.as_systemtime()) {
+            if d >= Duration::from_secs(300) {
+                let now = Rfc3339Time::new(now);
+                sqlx::query!(
+                    r#"
+                        UPDATE sessions SET updated = ? WHERE sessionid = ?"#,
+                    now,
+                    session_id,
+                )
+                .execute(&mut *txn)
+                .await?;
             }
         }
 

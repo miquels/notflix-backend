@@ -1,4 +1,4 @@
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 use std::fmt;
 use std::ops::Deref;
 
@@ -43,11 +43,16 @@ impl_sqlx_traits_for!(Rfc3339Time, text);
 
 impl Rfc3339Time {
     pub fn new(tm: SystemTime) -> Rfc3339Time {
+        // Round to a second.
+        let tm = match tm.duration_since(SystemTime::UNIX_EPOCH) {
+            Ok(d) => tm - Duration::from_nanos((d.as_nanos() % 1_000_000_000) as u64),
+            Err(_) => tm,
+        };
         Rfc3339Time(tm.into())
     }
 
-    pub fn as_systemtime(&self) -> &'_ SystemTime {
-        &self.0
+    pub fn as_systemtime(&self) -> SystemTime {
+        *self.deref()
     }
 }
 

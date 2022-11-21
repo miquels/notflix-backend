@@ -155,7 +155,7 @@ CREATE TABLE actors_in_item(
 */
 
 CREATE TABLE users(
-  id INTEGER PRIMARY KEY,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT NOT NULL,
   password TEXT NOT NULL,
   email TEXT
@@ -165,7 +165,8 @@ CREATE TABLE sessions(
   id INTEGER PRIMARY KEY,
   user_id INTEGER NOT NULL,
   sessionid TEXT NOT NULL,
-  timestamp TEXT NOT NULL,
+  created TEXT NOT NULL,
+  updated TEXT NOT NULL,
   data TEXT,
 
   FOREIGN KEY(user_id) REFERENCES users(id)

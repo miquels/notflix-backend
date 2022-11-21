@@ -1,10 +1,13 @@
 use anyhow::Result;
 use poem_openapi::{
-    payload::{Json, PlainText},
+    payload::{Json, Response},
     types::{Email, Password},
     ApiResponse, Object,
 };
-use poem::Request;
+use poem::{
+    web::cookie::{Cookie, SameSite},
+    Request,
+};
 
 use super::{Api, Authenticate, Session};
 use crate::models;
@@ -93,14 +96,25 @@ pub enum DeleteUserResponse {
 }
 
 #[derive(ApiResponse)]
-pub enum AuthResponse {
+pub enum LoginResponse {
     /// User successfully authenticated.
     #[oai(status = 200)]
-    Ok(PlainText<String>),
+    Ok(Json<String>),
 
-    /// Bad password or user not found.
+    /// Wrong password or user not found.
     #[oai(status = 404)]
     NotFound,
+
+    /// Origin: header not valid.
+    #[oai(status = 403)]
+    BadOrigin,
+}
+
+#[derive(ApiResponse)]
+pub enum LogoutResponse {
+    /// User successfully logged out
+    #[oai(status = 200)]
+    Ok(Json<String>),
 }
 
 impl Api {
@@ -171,45 +185,96 @@ impl Api {
         }
     }
 
-    pub async fn login(&self, req: &Request, auth: Json<Authenticate>) -> Result<AuthResponse> {
+    pub async fn login(&self, req: &Request, auth: Json<Authenticate>) -> Result<Response<LoginResponse>> {
         let mut txn = self.state.db.handle.begin().await?;
+
+        // Check Origin:
+        let origin = req.header("origin");
+        let origin_host = match origin {
+            Some(mut val) => {
+                // Strip prefix
+                val = val.strip_prefix("http://").unwrap_or(val);
+                val = val.strip_prefix("https://").unwrap_or(val);
+                // Strip port.
+                val = val.rsplit_once(":").map(|r| r.0).unwrap_or(val);
+                let mut names = self.state.config.server.hostname.iter();
+                (val == "localhost" || names.any(|h| h.eq_ignore_ascii_case(val))).then(||val)
+            },
+            None => None,
+        };
+        if origin_host.is_none() {
+            let origin = origin.unwrap_or("[none]");
+            log::info!("invalid origin \"{}\", rejecting login request", origin);
+            return Ok(Response::new(LoginResponse::BadOrigin))
+        }
 
         // Find user.
         let user = some_or_return!(models::User::lookup(&mut txn, &auth.username).await?, {
             log::info!("login: user {} not found", auth.username);
-            Ok(AuthResponse::NotFound)
+            Ok(Response::new(LoginResponse::NotFound))
         });
 
         // Verify password.
-        if !user.verify(&auth.password) {
-            if auth.username == "mike" && auth.password == "xyzzy" {
-                log::info!("using override password for 'mike'"); // XXX DEBUG FIXME
-            } else {
-                log::info!("login: user {} auth failed", auth.username);
-                return Ok(AuthResponse::NotFound);
-            }
+        let sha = user.password.starts_with("$6$");
+        if (sha && !user.verify(&auth.password)) || (!sha && user.password != auth.password) {
+            log::info!("login: user {} auth failed", auth.username);
+            return Ok(Response::new(LoginResponse::NotFound));
         }
 
         // Re-use session if it exists.
-        if let Some(sessionid) = req.header("x-session-id") {
-            let d = self.state.config.session.timeout;
-            if let Some(session) = models::Session::find(&mut txn, sessionid, d).await? {
-                return Ok(AuthResponse::Ok(PlainText(format!("{}", session.sessionid))));
+        let mut session = None;
+        let d = self.state.config.session.timeout;
+
+        let jar = req.cookie();
+        if let Some(cookie) = jar.get("x-session-id") {
+            // In a cookie?
+            session =  models::Session::find(&mut txn, cookie.value_str(), d).await?;
+        }
+
+        if session.is_none() {
+            // In the x-session-id header?
+            if let Some(sessionid) = req.header("x-session-id") {
+                session = models::Session::find(&mut txn, sessionid, d).await?;
             }
         }
 
-        // No, create new session.
-        let session = models::Session::create(&mut txn, user.id, &user.username).await?;
-        txn.commit().await?;
+        // Must login as the same user.
+        session = session.filter(|s| s.user_id == user.id);
 
-        Ok(AuthResponse::Ok(PlainText(format!("{}", session.sessionid))))
+        if session.is_none() {
+            // Create new session.
+            session = Some(models::Session::create(&mut txn, user.id, &user.username).await?);
+        }
+
+        txn.commit().await?;
+        let session = session.unwrap();
+
+        // Create cookie.
+        let mut cookie = Cookie::new_with_str("x-session-id", &session.sessionid);
+        cookie.set_http_only(true);
+        cookie.set_path("/");
+        cookie.set_same_site(SameSite::Lax);
+        cookie.make_permanent();
+
+        let resp = Response::new(LoginResponse::Ok(Json(session.sessionid)))
+            .header("set-cookie", cookie.to_string());
+
+        Ok(resp)
     }
 
-    pub async fn logout(&self, session: Session) -> Result<PlainText<String>> {
+    pub async fn logout(&self, session: Session, req: &Request) -> Result<Response<LogoutResponse>> {
         let mut txn = self.state.db.handle.begin().await?;
         models::Session::delete(&mut txn, &session.0.sessionid).await?;
         txn.commit().await?;
-        Ok(PlainText("logged out".to_string()))
-    }
 
+        // We need to build a response manually, we have to add the set-cookie header.
+        let mut resp = Response::new(LogoutResponse::Ok(Json("logged out".to_string())));
+        let jar = req.cookie();
+        if let Some(mut cookie) = jar.get("x-session-id") {
+            cookie.make_removal();
+            resp = resp.header("set-cookie", cookie.to_string());
+        }
+
+        Ok(resp)
+    }
 }

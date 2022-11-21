@@ -53,9 +53,7 @@ impl User {
     }
 
     pub async fn insert(&mut self, txn: &mut db::TxnHandle<'_>) -> Result<i64> {
-        let params = ok_or_return!(Sha512Params::new(10_000), |_| {
-            bail!("unexpected error in sha_crypt::Sha512Params::new");
-        });
+        let params = Sha512Params::default();
         let hashed = ok_or_return!(sha512_simple(&self.password, &params), |_| {
             bail!("unexpected error in sha-crypt::sha512_simple");
         });
@@ -101,9 +99,7 @@ impl UpdateUser {
     pub async fn update(&self, txn: &mut db::TxnHandle<'_>) -> Result<bool> {
         let hashed = match self.password.as_ref() {
             Some(password) => {
-                let params = ok_or_return!(Sha512Params::new(10_000), |_| {
-                    bail!("unexpected error in sha_crypt::Sha512Params::new");
-                });
+                let params = Sha512Params::default();
                 let hashed = ok_or_return!(sha512_simple(password, &params), |_| {
                     bail!("unexpected error in sha-crypt::sha512_simple");
                 });
@@ -116,7 +112,7 @@ impl UpdateUser {
         if self.username.is_some() {
             args.push("username = ?");
         }
-        if self.password.is_some() {
+        if hashed.is_some() {
             args.push("password = ?");
         }
         if self.email.is_some() {

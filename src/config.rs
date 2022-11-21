@@ -31,6 +31,8 @@ pub struct Server {
     pub tls_key: Option<String>,
     #[serde(default)]
     pub tls_listen: Vec<String>,
+    #[serde(default)]
+    pub hostname: Vec<String>,
 
     #[serde(default, skip)]
     pub addrs: Vec<SocketAddr>,

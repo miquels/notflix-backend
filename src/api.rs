@@ -1,6 +1,6 @@
 use poem_openapi::{
     param::Path,
-    payload::{Json, PlainText},
+    payload::{Json, Response},
     Object, OpenApi, Tags,
 };
 use poem::{Result, Request};
@@ -47,15 +47,15 @@ impl Api {
 
     /// Authenticate to get a session key
     #[oai(path = "/auth/login", method = "post", tag = "ApiTags::Authorization")]
-    async fn api_login(&self, req: &Request, auth: Json<Authenticate>) -> Result<AuthResponse> {
+    async fn api_login(&self, req: &Request, auth: Json<Authenticate>) -> Result<Response<LoginResponse>> {
         let resp = self.login(req, auth).await?;
         Ok(resp)
     }
 
     /// Invalidate session key.
     #[oai(path = "/auth/logout", method = "post", tag = "ApiTags::Authorization")]
-    async fn api_logout(&self, session: Session) -> Result<PlainText<String>> {
-        let resp = self.logout(session).await?;
+    async fn api_logout(&self, session: Session, req: &Request) -> Result<Response<LogoutResponse>> {
+        let resp = self.logout(session, req).await?;
         Ok(resp)
     }
 
