@@ -28,7 +28,7 @@ impl Api {
         };
         let mut txn = self.state.db.handle.begin().await?;
         let by = FindItemBy::id(tvshow_id, false);
-        match TVShow::lookup_by(&mut txn, &by).await {
+        match TVShow::lookup_by(&mut txn, &by, true).await? {
             Some(tvshow) => Ok(GetTVShowResponse::Ok(Json(tvshow))),
             None => Ok(GetTVShowResponse::NotFound),
         }

@@ -84,13 +84,13 @@ macro_rules! build_struct {
         compile_error!(stringify!("build_struct: @V:" $($tt)*));
     };
     ($struct:ident, $src:tt, $($field:tt $(.$field2:tt)*),+) => {
-        Some({
+        {
             let mut v = $struct::default();
             $(
                 build_struct!(@E v.$field $(.$field2)*) = build_struct!(@V $src, $field $(.$field2)*);
             )+
             v
-        })
+        }
     };
 }
 pub(crate) use build_struct;

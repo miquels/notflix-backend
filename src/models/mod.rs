@@ -21,6 +21,7 @@ pub use uniqueids::UniqueIds;
 pub use user::{User, UpdateUser};
 
 use async_trait::async_trait;
+use anyhow::Result;
 
 use crate::db;
 use crate::util::SystemTimeToUnixTime;
@@ -34,7 +35,7 @@ pub trait MediaItem {
     fn lastmodified(&self) -> i64;
     fn nfo_lastmodified(&self) -> Option<i64>;
     fn undelete(&mut self);
-    async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &db::FindItemBy<'_>) -> Option<Box<Self>>;
+    async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &db::FindItemBy<'_>) -> Result<Option<Box<Self>>>;
     async fn insert(&mut self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()>;
     async fn update(&self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()>;
 }
@@ -72,7 +73,7 @@ impl MediaItem for Movie {
         }
     }
 
-    async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &db::FindItemBy<'_>) -> Option<Box<Self>> {
+    async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &db::FindItemBy<'_>) -> Result<Option<Box<Self>>> {
         Self::lookup_by(dbh, find).await
     }
 
@@ -118,8 +119,8 @@ impl MediaItem for TVShow {
         }
     }
 
-    async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &db::FindItemBy<'_>) -> Option<Box<Self>> {
-        Self::lookup_by(dbh, find).await
+    async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &db::FindItemBy<'_>) -> Result<Option<Box<Self>>> {
+        Self::lookup_by(dbh, find, true).await
     }
 
     async fn insert(&mut self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()> {

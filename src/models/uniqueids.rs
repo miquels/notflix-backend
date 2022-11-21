@@ -21,10 +21,10 @@ impl UniqueIds {
         }
     }
 
-    pub async fn get_mediaitem_id(dbh: &mut db::TxnHandle<'_>, uids: &[UniqueId]) -> Option<i64> {
+    pub async fn get_mediaitem_id(dbh: &mut db::TxnHandle<'_>, uids: &[UniqueId]) -> Result<Option<i64>> {
 
         if uids.len() == 0 {
-            return None;
+            return Ok(None);
         }
 
         // Well, this is ugly, but I don't know a better way.
@@ -53,15 +53,14 @@ impl UniqueIds {
         // And execute it.
         let rows = query
             .fetch_all(dbh)
-            .await
-            .ok()?;
+            .await?;
 
         if rows.len() == 0 {
-            return None;
+            return Ok(None);
         }
 
         // FIXME: check if there's only one unique mediaitem_id.
-        Some(rows[0].0)
+        Ok(Some(rows[0].0))
     }
 
     pub async fn update(&self, txn: &mut db::TxnHandle<'_>, uids: &[UniqueId]) -> Result<()> {

@@ -54,15 +54,15 @@ pub struct Episode {
 }
 
 impl Episode {
-    pub async fn select_one(dbh: &mut db::TxnHandle<'_>, episode_id: i64) -> Option<Episode> {
+    pub async fn select_one(dbh: &mut db::TxnHandle<'_>, episode_id: i64) -> Result<Option<Episode>> {
         let mut v = Episode::select(dbh, None, None, Some(episode_id)).await?;
-        v.pop()
+        Ok(v.pop())
     }
 
-    pub async fn select(dbh: &mut db::TxnHandle<'_>, tvshow_id: Option<i64>, season_id: Option<i64>, episode_id: Option<i64>) -> Option<Vec<Episode>> {
+    pub async fn select(dbh: &mut db::TxnHandle<'_>, tvshow_id: Option<i64>, season_id: Option<i64>, episode_id: Option<i64>) -> Result<Vec<Episode>> {
         let mut rows = sqlx::query!(
             r#"
-                SELECT i.id AS "id: i64",
+                SELECT i.id AS "id!: i64",
                        i.collection_id AS "collection_id: i64",
                        i.directory AS "directory!: FileInfo",
                        i.deleted AS "deleted!: bool",
@@ -77,38 +77,39 @@ impl Episode {
                        i.credits AS "credits!: JVec<String>",
                        i.directors AS "directors!: JVec<String>",
                        m.tvshow_id,
-                       m.video AS "video!: FileInfo",
-                       m.season AS "season: u32",
-                       m.episode AS "episode: u32",
                        m.aired,
                        m.runtime AS "runtime: u32",
                        m.displayseason AS "displayseason: u32",
-                       m.displayepisode AS "displayepisode: u32"
+                       m.displayepisode AS "displayepisode: u32",
+                       m.video AS "video!: FileInfo",
+                       m.season AS "season: u32",
+                       m.episode AS "episode: u32"
                 FROM mediaitems i
                 JOIN episodes m ON (m.mediaitem_id = i.id)
                 WHERE (m.tvshow_id = ? OR ? IS NULL)
                   AND (m.season = ? OR ? IS NULL)
                   AND (i.id = ? OR ? IS NULL)
-                  AND i.deleted = 0"#,
-                tvshow_id,
-                tvshow_id,
-                season_id,
-                season_id,
-                episode_id,
-                episode_id
+                  AND i.deleted = 0
+                ORDER BY m.season, m.episode"#,
+            tvshow_id,
+            tvshow_id,
+            season_id,
+            season_id,
+            episode_id,
+            episode_id
         )
         .fetch(dbh);
 
         let mut episodes = Vec::new();
-        while let Some(row) = rows.try_next().await.ok().flatten() {
+        while let Some(row) = rows.try_next().await? {
             let ep = build_struct!(Episode, row,
                 id, collection_id, directory, deleted, lastmodified, dateadded, nfofile, thumbs,
                 nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.ratings,
                 nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
-                tvshow_id, video, season, episode, aired, runtime, displayseason, displayepisode)?;
+                tvshow_id, video, season, episode, aired, runtime, displayseason, displayepisode);
             episodes.push(ep);
         }
-        Some(episodes)
+        Ok(episodes)
     }
 
     pub fn copy_nfo_from(&mut self, other: &Episode) {
@@ -124,13 +125,13 @@ impl Episode {
         self.id = sqlx::query!(
             r#"
                 INSERT INTO mediaitems(
+                    type,
                     collection_id,
                     directory,
                     lastmodified,
                     dateadded,
                     thumbs,
                     nfofile,
-                    type,
                     title,
                     plot,
                     tagline,
@@ -139,7 +140,7 @@ impl Episode {
                     actors,
                     credits,
                     directors
-                ) VALUES(?, ?, ?, ?, "episode", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES("episode", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.collection_id,
             self.directory,
             self.lastmodified,
@@ -166,19 +167,21 @@ impl Episode {
                     tvshow_id,
                     aired,
                     runtime,
-                    season,
-                    episode,
                     displayseason,
-                    displayepisode
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?)"#,
+                    displayepisode,
+                    video,
+                    season,
+                    episode
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.id,
             self.tvshow_id,
             self.aired,
             self.runtime,
-            self.season,
-            self.episode,
             self.displayseason,
             self.displayepisode,
+            self.video,
+            self.season,
+            self.episode,
         )
         .execute(&mut *txn)
         .await?;
@@ -231,19 +234,21 @@ impl Episode {
                     video = ?,
                     aired = ?,
                     runtime = ?,
-                    season = ?,
-                    episode = ?,
                     displayseason = ?,
-                    displayepisode = ?
+                    displayepisode = ?,
+                    video = ?,
+                    season = ?,
+                    episode = ?
                 WHERE mediaitem_id = ?"#,
             self.tvshow_id,
             self.video,
             self.aired,
             self.runtime,
-            self.season,
-            self.episode,
             self.displayseason,
             self.displayepisode,
+            self.video,
+            self.season,
+            self.episode,
             self.id
         )
         .execute(&mut *txn)

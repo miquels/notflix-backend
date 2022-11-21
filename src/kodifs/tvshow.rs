@@ -112,7 +112,8 @@ impl Show {
             let showdir = self.basedir.clone();
             let db_episode = self.get_episode_mut(basepath);
 
-            if let Some(ep) = Episode::new(showdir, name, basepath, season_hint, db_episode).await {
+            if let Some(mut ep) = Episode::new(showdir, name, basepath, season_hint, db_episode).await {
+                ep.episode.tvshow_id = self.tvshow.id;
                 episodes.push(ep);
             }
         }

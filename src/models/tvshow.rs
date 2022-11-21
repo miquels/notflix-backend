@@ -1,9 +1,11 @@
+use std::collections::BTreeMap;
 use anyhow::Result;
 use serde::Serialize;
 use poem_openapi::Object;
 
 use crate::jvec::JVec;
 use crate::db::{self, FindItemBy};
+use crate::util::some_or_return;
 use super::nfo::build_struct;
 use super::{Actor, Rating, Thumb, UniqueId};
 use super::{Episode, NfoBase, NfoMovie, FileInfo, is_default};
@@ -59,15 +61,19 @@ impl TVShow {
         self.status = other.status.clone();
     }
 
-    pub async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &FindItemBy<'_>) -> Option<Box<TVShow>> {
+    pub async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &FindItemBy<'_>, include_episodes: bool) -> Result<Option<Box<TVShow>>> {
         // Find the ID.
         let id = match find.is_only_id() {
             Some(id) => id,
-            None => db::lookup(dbh, &find).await?,
+            None => match db::lookup(dbh, &find).await? {
+                Some(id) => id,
+                None => return Ok(None),
+            },
         };
+        log::trace!("lookup_by: querying id {}", id);
 
         // Find the item in the database.
-        let r = sqlx::query!(
+        let row = sqlx::query!(
             r#"
                 SELECT i.id AS "id: i64",
                        i.collection_id AS "collection_id: i64",
@@ -99,17 +105,32 @@ impl TVShow {
             id,
             find.deleted_too,
         )
-        .fetch_one(dbh)
-        .await
-        .ok()?;
-        let m = build_struct!(TVShow, r,
+        .fetch_optional(&mut *dbh)
+        .await?;
+        let row = some_or_return!(row, {
+            Ok(None)
+        });
+
+        let mut seasons = Vec::new();
+        if include_episodes {
+            let episodes = Episode::select(dbh, Some(id), None, None).await?;
+            let mut sns = BTreeMap::new();
+            for ep in episodes.into_iter() {
+                let e = sns.entry(ep.season).or_insert(Vec::new());
+                e.push(ep);
+            }
+            seasons = sns.into_iter().map(|(s, e)| Season { season: s, episodes: e }).collect();
+        }
+
+        let mut m = build_struct!(TVShow, row,
             id, collection_id, directory, deleted, lastmodified, dateadded, nfofile, thumbs,
             nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.ratings,
             nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
             nfo_movie.originaltitle, nfo_movie.sorttitle, nfo_movie.countries,
             nfo_movie.genres, nfo_movie.studios, nfo_movie.premiered, nfo_movie.mpaa,
-            total_seasons, total_episodes, status)?;
-        Some(Box::new(m))
+            total_seasons, total_episodes, status);
+        m.seasons = seasons;
+        Ok(Some(Box::new(m)))
     }
 
     pub async fn insert(&mut self, txn: &mut db::TxnHandle<'_>) -> Result<()> {
@@ -182,6 +203,14 @@ impl TVShow {
         )
         .execute(&mut *txn)
         .await?;
+
+        // Now the episodes.
+        for season in &mut self.seasons {
+            for episode in &mut season.episodes {
+                episode.tvshow_id = self.id;
+                episode.insert(&mut *txn).await?;
+            }
+        }
 
         Ok(())
     }

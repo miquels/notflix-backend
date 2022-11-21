@@ -47,11 +47,14 @@ pub struct Movie {
 }
 
 impl Movie {
-    pub async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &FindItemBy<'_>) -> Option<Box<Movie>> {
+    pub async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &FindItemBy<'_>) -> Result<Option<Box<Movie>>> {
         // Find the ID.
         let id = match find.is_only_id() {
             Some(id) => id,
-            None => db::lookup(dbh, &find).await?,
+            None => match db::lookup(dbh, &find).await? {
+                Some(id) => id,
+                None => return Ok(None),
+            },
         };
 
         // Find the item in the database.
@@ -93,7 +96,7 @@ impl Movie {
             Ok(r) => r,
             Err(e) => {
                 log::error!("error getting movie by id {}: {}", id, e);
-                return None;
+                return Ok(None);
             },
         };
 
@@ -103,8 +106,8 @@ impl Movie {
             nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
             nfo_movie.originaltitle, nfo_movie.sorttitle, nfo_movie.countries,
             nfo_movie.genres, nfo_movie.studios, nfo_movie.premiered, nfo_movie.mpaa,
-            runtime, video)?;
-        Some(Box::new(m))
+            runtime, video);
+        Ok(Some(Box::new(m)))
     }
 
     pub async fn insert(&mut self, txn: &mut db::TxnHandle<'_>) -> Result<()> {

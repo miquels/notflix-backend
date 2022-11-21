@@ -71,7 +71,7 @@ impl Db {
         // Try to get the item from the database by collection id and directory name.
         log::trace!("Db::update_mediaitem: database lookup for {}", name);
         let by = FindItemBy::directory(coll.collection_id, name, false);
-        let mut db_item = M::lookup_by(&mut *txn, &by).await;
+        let mut db_item = M::lookup_by(&mut *txn, &by).await?;
         log::trace!("Db::update_mediaitem: found: {:?}", db_item.is_some());
 
         // If not found, read the NFO file to get the uniqueids, and search for that.
@@ -83,7 +83,7 @@ impl Db {
 
                 // Try to find the mediaitem in the db by uniqueid.
                 let by = FindItemBy::uniqueids(mv.uniqueids(), true);
-                if let Some(mut oldmv) = M::lookup_by(&mut *txn, &by).await {
+                if let Some(mut oldmv) = M::lookup_by(&mut *txn, &by).await? {
                     log::trace!("Db::update_mediaitem: found item in db by uniqueid");
                     oldmv.set_collection_id(coll.collection_id as i64);
                     db_item = Some(oldmv);
@@ -91,7 +91,7 @@ impl Db {
                 } else {
                     // Not in the db, but perhaps we did have it before,
                     // and we remembered the ID it had then.
-                    if let Some(id) = lookup(&mut *txn, &by).await {
+                    if let Some(id) = lookup(&mut *txn, &by).await? {
                         log::trace!("Db::update_mediaitem:: found item id in db by uniqueid");
                         let mut mv = Box::new(M::default());
                         mv.set_id(id);
@@ -284,16 +284,16 @@ impl Db {
     }
 
     // Lookup a movie or tvshow in the database and return it's ID.
-    pub async fn lookup(&self, by: &FindItemBy<'_>) -> Option<i64> {
-        let mut txn = self.handle.begin().await.ok()?;
-        let res = lookup(&mut txn, by).await;
-        txn.commit().await.ok()?;
-        res
+    pub async fn lookup(&self, by: &FindItemBy<'_>) -> Result<Option<i64>> {
+        let mut txn = self.handle.begin().await?;
+        let res = lookup(&mut txn, by).await?;
+        txn.commit().await?;
+        Ok(res)
     }
 }
 
 // Lookup a movie or tvshow in the database and return it's ID.
-pub async fn lookup(txn: &mut TxnHandle<'_>, by: &FindItemBy<'_>) -> Option<i64> {
+pub async fn lookup(txn: &mut TxnHandle<'_>, by: &FindItemBy<'_>) -> Result<Option<i64>> {
     let id = sqlx::query!(
         r#"
             SELECT  i.id
@@ -307,13 +307,11 @@ pub async fn lookup(txn: &mut TxnHandle<'_>, by: &FindItemBy<'_>) -> Option<i64>
             by.title,
     )
     .fetch_optional(&mut *txn)
-    .await
-    .ok()
-    .flatten()
+    .await?
     .map(|row| row.id);
 
     if id.is_some() {
-        return id;
+        return Ok(id);
     }
 
     // OK now the UniqueId lookup.
