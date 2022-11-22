@@ -15,6 +15,11 @@ pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<
     let mut entries = Vec::new();
     let (oldest, newest) = scandirs::read_dir(&dirpath, false, &mut entries, true).await.ok()?;
 
+    // Skip tvshow directories.
+    if entries.iter().any(|s| s == "tvshow.nfo") {
+        return None;
+    }
+
     // Loop over all directory entries.
     let mut basepath = String::new();
     let mut video = None;
@@ -102,11 +107,15 @@ pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<
                 Ok(nfo) => {
                     nfo.update_movie(&mut movie);
                     movie.nfofile = nfofile;
+                    if !movie.nfo_base.nfo_type.is_movie() {
+                        // If the NFO file says it's a <tvshow> or <episode>, bail out.
+                        return None;
+                    }
                 },
                 Err(e) => {
                     // We failed. Will automatically try again as soon
                     // as ctime or mtime of the file is updated.
-                    println!("error reading nfo: {}", e);
+                    log::debug!("failed to read {}: {}", nfofile.as_ref().unwrap().fullpath, e);
                 },
             }
             continue;

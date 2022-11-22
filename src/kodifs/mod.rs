@@ -10,7 +10,7 @@ use crate::jvec::JVec;
 mod movie;
 mod tvshow;
 mod episode;
-mod nfo;
+pub(crate) mod nfo;
 pub mod scandirs;
 
 pub use movie::scan_movie_dir;

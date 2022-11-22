@@ -41,6 +41,8 @@ pub struct Episode {
     pub aired: Option<String>,
     #[oai(skip_serializing_if = "is_default")]
     pub runtime: Option<u32>,
+    // #[oai(skip_serializing_if = "is_default")]
+    // pub status: Option<u32>,
     #[oai(skip_serializing_if = "is_default")]
     pub displayseason: Option<u32>,
     #[oai(skip_serializing_if = "is_default")]

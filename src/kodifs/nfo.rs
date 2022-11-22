@@ -94,6 +94,10 @@ pub struct VideoDetails {
     pub width:  Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_u32")]
     pub height:  Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_f32")]
+    pub duration:  Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_u32")]
+    pub durationinseconds:  Option<u32>,
 }
 
 /// Ratings.
@@ -125,10 +129,38 @@ pub struct Rating {
     pub votes:    Option<u32>,
 }
 
+/// NFO file type.
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+pub enum NfoType {
+    Movie,
+    TVShow,
+    Episode,
+    #[default]
+    Unknown,
+}
+
+impl NfoType {
+    /// Movie or Unknown.
+    pub fn is_movie(&self) -> bool {
+        *self == NfoType::Movie || *self == NfoType::Unknown
+    }
+    /// TVShow or Unknown.
+    pub fn is_tvshow(&self) -> bool {
+        *self == NfoType::TVShow || *self == NfoType::Unknown
+    }
+    /// Episode or Unknown.
+    pub fn is_episode(&self) -> bool {
+        *self == NfoType::Episode || *self == NfoType::Unknown
+    }
+}
+
 /// NFO file contents.
 #[derive(Serialize, Deserialize, Default, Debug)]
 #[serde(default)]
 pub struct Nfo {
+    #[serde(skip)]
+    pub nfo_type:  NfoType,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title:  Option<String>,
 
@@ -240,6 +272,17 @@ impl Nfo {
         let mut xml = String::new();
         file.read_to_string(&mut xml).await?;
         let mut nfo: Nfo = from_str(&xml)?;
+
+        let xml = xml.trim_start();
+        if xml.starts_with("<movie>") {
+            nfo.nfo_type = NfoType::Movie;
+        }
+        if xml.starts_with("<tvshow>") {
+            nfo.nfo_type = NfoType::TVShow;
+        }
+        if xml.starts_with("<episode") {
+            nfo.nfo_type = NfoType::Episode;
+        }
 
         // Fix up genre.
         if nfo.genre.iter().any(|g| g.contains(",") || g.contains("/")) {
@@ -360,6 +403,7 @@ impl Nfo {
         }
 
         NfoBase {
+            nfo_type: self.nfo_type.clone(),
             title: self.title.clone(),
             plot: self.plot.clone(),
             tagline: self.tagline.clone(),
@@ -397,12 +441,30 @@ impl Nfo {
         }
     }
 
+    fn get_runtime_in_mins(&self) -> Option<u32> {
+        if self.runtime.is_some() {
+            return self.runtime;
+        }
+        let video = self
+            .fileinfo
+            .as_ref()
+            .and_then(|f| f.streamdetails.as_ref())
+            .and_then(|s| s.video.as_ref())?;
+        if let Some(d) = video.duration {
+            return Some(d as u32);
+        }
+        if let Some(d) = video.durationinseconds {
+            return Some(d / 60);
+        }
+        None
+    }
+
     pub fn update_movie(&self, item: &mut models::Movie) {
         let title = item.nfo_base.title.take();
         let premiered = item.nfo_movie.premiered.take();
         item.nfo_base = self.to_nfo_base();
         item.nfo_movie = self.to_nfo_movie();
-        item.runtime = self.runtime.clone();
+        item.runtime = self.get_runtime_in_mins();
         if item.nfo_base.title.is_none() {
             item.nfo_base.title = title;
         }
@@ -426,8 +488,9 @@ impl Nfo {
     pub fn update_episode(&self, item: &mut models::Episode) {
         let title = item.nfo_base.title.take();
         item.nfo_base = self.to_nfo_base();
-        item.runtime = self.runtime.clone();
-        item.aired = self.status.clone();
+        item.aired = self.aired.clone();
+        item.runtime = self.get_runtime_in_mins();
+        // item.status = self.status.clone();
         item.displayseason = self.displayseason.clone();
         item.displayepisode = self.displayepisode.clone();
         if item.nfo_base.title.is_none() {
@@ -436,16 +499,16 @@ impl Nfo {
     }
 }
 
-// Sometimes the "rating" field is invalid. Ignore it if so.
+// Sometimes a f32 field (like "rating") is invalid. Ignore it if so.
 fn deserialize_f32<'de, D>(deserializer: D) -> Result<Option<f32>, D::Error>
 where
     D: de::Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
-    Ok(s.parse::<f32>().ok())
+    Ok(s.parse::<f32>().ok().filter(|v| *v >= 0f32 && *v < u32::MAX as f32))
 }
 
-// Sometimes the "vote" or "year" field is invalid. Ignore it if so.
+// Sometimes a u32 field (like "vote" or "year") is invalid. Ignore it if so.
 fn deserialize_u32<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
 where
     D: de::Deserializer<'de>,

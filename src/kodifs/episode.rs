@@ -1,4 +1,7 @@
+use chrono::TimeZone;
+
 use crate::models::{self, FileInfo};
+use crate::util::SystemTimeToUnixTime;
 use super::*;
 
 #[derive(Default, Debug)]
@@ -32,8 +35,12 @@ impl Episode {
             db_episode.deleted = true;
             episode.deleted = false;
         }
+        let modified = video.modified.unixtime_ms();
+        if let chrono::LocalResult::Single(c) = chrono::Local.timestamp_millis_opt(modified) {
+            episode.dateadded = Some(c.format("%Y-%m-%d").to_string());
+        }
+        episode.lastmodified = modified;
         episode.video = video;
-        // TODO XXX episode.modified(Some(&video.modified));
 
         // Add info from the filename.
         episode.nfo_base.title = Some(ep_info.name);
@@ -49,12 +56,15 @@ impl Episode {
         })
     }
 
-    pub async fn finalize(mut self) -> models::Episode {
+    pub async fn finalize(mut self) -> Option<models::Episode> {
         let mut files = std::mem::replace(&mut self.files, Vec::new());
         for name in files.drain(..) {
             self.add_related_file(name).await;
         }
-        self.episode
+        if !self.episode.nfo_base.nfo_type.is_episode() {
+            return None;
+        }
+        Some(self.episode)
     }
 
     // See if this is a file that is related to an episode, by
@@ -178,7 +188,9 @@ impl EpisodeNameInfo {
         const PAT4: &'static str = r#"^.*[ .]([0-9]{1,2})x?([0-9]{2})[ .].*$"#;
         if let Some(caps) = regex!(PAT4).captures(name) {
             if let Ok(sn) = caps[1].parse::<u32>() {
-                if season_hint.is_none() || season_hint == Some(sn) {
+                // Don't parse ___.2022.___
+                let no_hint_ok = season_hint.is_none() && sn >= 19 && sn <= 21;
+                if no_hint_ok || season_hint == Some(sn) {
                     ep.name = format!("{:02}x{}", sn, &caps[2]);
                     ep.season = sn;
                     ep.episode = caps[2].parse::<u32>().unwrap_or(0);

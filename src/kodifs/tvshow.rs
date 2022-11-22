@@ -70,7 +70,7 @@ impl Show {
         false
     }
 
-    async fn show_scan_dir(&mut self) -> io::Result<()> {
+    async fn show_scan_dir(&mut self, coll: &Collection) -> io::Result<()> {
 
         // Get all the files up front.
         let mut episodes = Vec::new();
@@ -114,6 +114,7 @@ impl Show {
 
             if let Some(mut ep) = Episode::new(showdir, name, basepath, season_hint, db_episode).await {
                 ep.episode.tvshow_id = self.tvshow.id;
+                ep.episode.collection_id = coll.collection_id as i64;
                 episodes.push(ep);
             }
         }
@@ -127,9 +128,10 @@ impl Show {
 
         // We have all episodes now, process the files in them.
         for ep in episodes.drain(..) {
-            let ep = ep.finalize().await;
-            let season_idx = self.get_season(ep.season as u32);
-            self.seasons[season_idx].episodes.push(ep);
+            if let Some(ep) = ep.finalize().await {
+                let season_idx = self.get_season(ep.season as u32);
+                self.seasons[season_idx].episodes.push(ep);
+            }
         }
 
         Ok(())
@@ -217,7 +219,7 @@ impl Show {
         }
 
         // Scan the show's directory.
-        item.show_scan_dir().await.ok()?;
+        item.show_scan_dir(coll).await.ok()?;
 
         // remove episodes without video, then sort.
         for season_idx in 0 .. item.seasons.len() {

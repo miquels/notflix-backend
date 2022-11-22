@@ -6,10 +6,15 @@ use crate::jvec::JVec;
 use super::is_default;
 use super::{Rating, UniqueId, Actor};
 
+pub use crate::kodifs::nfo::NfoType;
+
 #[derive(Object, Serialize, Deserialize, Clone, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
 pub struct NfoBase {
     // Basic NFO
+    #[serde(skip_serializing_if = "is_default")]
+    #[oai(skip)]
+    pub nfo_type: NfoType,
     #[serde(skip_serializing_if = "is_default")]
     #[oai(skip_serializing_if = "is_default")]
     pub title: Option<String>,
