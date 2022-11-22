@@ -1,5 +1,6 @@
 mod episode;
 mod fileinfo;
+mod image;
 mod mediainfo;
 mod misc;
 mod movie;
@@ -11,6 +12,7 @@ mod user;
 
 pub use episode::Episode;
 pub use fileinfo::FileInfo;
+pub use image::{Image, GetImage, ImageState};
 pub use mediainfo::MediaInfo;
 pub use misc::*;
 pub use movie::Movie;

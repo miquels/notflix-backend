@@ -102,25 +102,28 @@ CREATE TABLE episodes(
 
 CREATE TABLE images(
   id INTEGER PRIMARY KEY,
+  collection_id INTEGER NOT NULL,
   mediaitem_id INTEGER NOT NULL,
 
-  -- non-unique id (resized images have the same id).
+  -- Variants have the same image_id. Original has id == image_id.
   image_id INTEGER NOT NULL,
+
+  -- path, mtime, size.
+  fileinfo JSON NOT NULL,
 
   -- art type (poster, thumb, fanart).
   aspect TEXT NOT NULL,
 
   -- dimensions
-  width NOT NULL,
-  height NOT NULL,
-
-  -- location, and inode/size to detect changes.
-  path JSON NOT NULL,
+  width INTEGER NOT NULL,
+  height INTEGER NOT NULL,
+  quality INTEGER NOT NULL DEFAULT 100,
 
   -- extra info. E.g. for seasons, season thumb or name.
   extra JSON,
 
   FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
+  FOREIGN KEY(image_id) REFERENCES images(id)
 );
 CREATE INDEX idx_images_image_id ON images(image_id);
 
