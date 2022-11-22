@@ -8,12 +8,14 @@ use poem::{Result, Request};
 use crate::server::{SharedState, SessionIdAuthorization};
 
 mod collection;
-mod user;
+mod movie;
 mod tvshow;
+mod user;
 
 use collection::*;
-use user::*;
+use movie::*;
 use tvshow::*;
+use user::*;
 
 pub type Session = SessionIdAuthorization;
 
@@ -23,8 +25,8 @@ enum ApiTags {
     Authorization,
     /// Operations on collections.
     Collection,
-    /// Operations on tvshows.
-    TVShow,
+    /// Operations on tvshows, movies.
+    Media,
     /// Operations on users.
     User,
 }
@@ -61,22 +63,29 @@ impl Api {
 
     /// List collections.
     #[oai(path = "/collections", method = "get", tag = "ApiTags::Collection")]
-    async fn api_get_collections(&self) -> Result<GetCollectionsResponse> {
+    async fn api_get_collections(&self, _session: Session) -> Result<GetCollectionsResponse> {
         let res = self.get_collections().await?;
         Ok(res)
     }
 
     /// Get thumbnails of a collection.
     #[oai(path = "/collection/:collection_id/thumbs", method = "get", tag = "ApiTags::Collection")]
-    async fn api_get_thumbs(&self, collection_id: Path<i64>) -> Result<GetThumbsResponse> {
+    async fn api_get_thumbs(&self, _session: Session, collection_id: Path<i64>) -> Result<GetThumbsResponse> {
         let res = self.get_thumbs(collection_id.0).await?;
         Ok(res)
     }
 
     /// Find tvshow by id.
-    #[oai(path = "/tvshow/:collection_id/:tvshow_id", method = "get", tag = "ApiTags::TVShow")]
-    async fn api_get_tvshow(&self, collection_id: Path<i64>, tvshow_id: Path<i64>) -> Result<GetTVShowResponse> {
+    #[oai(path = "/tvshow/:collection_id/:tvshow_id", method = "get", tag = "ApiTags::Media")]
+    async fn api_get_tvshow(&self, _session: Session, collection_id: Path<i64>, tvshow_id: Path<i64>) -> Result<GetTVShowResponse> {
         let res = self.get_tvshow(collection_id.0, tvshow_id.0).await?;
+        Ok(res)
+    }
+
+    /// Find movie by id.
+    #[oai(path = "/movie/:collection_id/:movie_id", method = "get", tag = "ApiTags::Media")]
+    async fn api_get_movie(&self, _session: Session, collection_id: Path<i64>, movie_id: Path<i64>) -> Result<GetMovieResponse> {
+        let res = self.get_movie(collection_id.0, movie_id.0).await?;
         Ok(res)
     }
 
