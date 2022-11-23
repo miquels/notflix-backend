@@ -1,20 +1,22 @@
 use chrono::TimeZone;
 
-use crate::models::{self, FileInfo};
+use crate::collections::Collection;
+use crate::models::{self, FileInfo, Thumb};
 use crate::util::SystemTimeToUnixTime;
 use super::*;
 
-#[derive(Default, Debug)]
-pub struct Episode {
+#[derive(Debug)]
+pub struct Episode<'c> {
     pub showdir: String,
     pub basepath: String,
     pub files:   Vec<String>,
     pub episode: models::Episode,
+    pub coll: &'c Collection,
 }
 
-impl Episode {
+impl<'c> Episode<'c> {
 
-    pub async fn new(showdir: String, name: &str, basepath: &str, season_hint: Option<u32>, db_episode: Option<&mut models::Episode>) -> Option<Episode> {
+    pub async fn new<'a>(coll: &'a Collection, showdir: String, name: &str, basepath: &str, season_hint: Option<u32>, db_episode: Option<&mut models::Episode>) -> Option<Episode<'a>> {
 
         // Parse the episode filename for season and episode number etc.
         let ep_info = match EpisodeNameInfo::parse(basepath, season_hint) {
@@ -53,6 +55,7 @@ impl Episode {
             basepath: basepath.to_string(),
             files: Vec::new(),
             episode,
+            coll,
         })
     }
 
@@ -81,7 +84,9 @@ impl Episode {
         // Thumb: <base>.tbn or <base>-thumb.ext
         if IS_IMAGE.is_match(&name) {
             if ext == "tbn" || aux == "thumb" {
-                add_thumb(&mut self.episode.thumbs, "", name, "thumb", None);
+                if let Err(e) = Thumb::add(&mut self.episode.thumbs, &self.showdir, &name, self.coll, self.episode.id, "thumb", None).await {
+                    log::debug!("Episode::add_related_file: {}/{}: {}", self.showdir, name, e);
+                }
             }
             return;
         }

@@ -15,16 +15,17 @@ pub struct MediaInfo {
 }
 
 impl MediaInfo {
-    pub async fn get_all(dbh: &db::DbHandle, collection_id: i64) -> Result<Vec<MediaInfo>> {
+    pub async fn get_all(dbh: &db::DbHandle, collection_id: i64, type_: &str) -> Result<Vec<MediaInfo>> {
         let mut rows = sqlx::query!(
             r#"
                 SELECT i.id AS "id!: i64",
                        i.title,
                        i.thumbs AS "thumbs!: JVec<Thumb>"
                 FROM mediaitems i
-                WHERE i.collection_id = ?
+                WHERE i.collection_id = ? AND i.type = ?
                 ORDER BY LOWER( title)"#,
-            collection_id
+            collection_id,
+            type_,
         )
         .fetch(dbh);
 

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::sqlx::impl_sqlx_traits_for;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FileInfo {
     pub path:   String,
     pub inode:  u64,
@@ -14,6 +14,13 @@ pub struct FileInfo {
     pub fullpath: String,
 }
 impl_sqlx_traits_for!(FileInfo);
+
+impl std::cmp::PartialEq for FileInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path && self.inode == other.inode &&
+            self.size == other.size && self.modified == other.modified
+    }
+}
 
 impl std::default::Default for FileInfo {
     fn default() -> FileInfo {
@@ -50,6 +57,19 @@ impl FileInfo {
         let fullpath = FileInfo::join(basedir, path);
         let f = File::open(&fullpath).await?;
         let m = f.metadata().await?;
+        Ok((f, FileInfo {
+            path: path.to_string(),
+            fullpath,
+            inode: m.ino(),
+            size: m.len(),
+            modified: m.modified()?,
+        }))
+    }
+
+    pub fn open_std(basedir: &str, path: &str) -> io::Result<(std::fs::File, FileInfo)> {
+        let fullpath = FileInfo::join(basedir, path);
+        let f = std::fs::File::open(&fullpath)?;
+        let m = f.metadata()?;
         Ok((f, FileInfo {
             path: path.to_string(),
             fullpath,

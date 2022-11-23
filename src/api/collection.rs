@@ -57,7 +57,7 @@ impl Api {
             Some(coll) => coll,
             None => return Ok(GetThumbsResponse::NotFound),
         };
-        let mut items = models::MediaInfo::get_all(&self.state.db.handle, coll.collection_id as i64).await?;
+        let mut items = models::MediaInfo::get_all(&self.state.db.handle, coll.collection_id as i64, coll.subtype()).await?;
         let m = items.drain(..).map(|i| {
                 let poster = i.poster.map(|_| format!("/api/images/{}/{}/poster.jpg", collection_id, i.id));
                 MediaItem {

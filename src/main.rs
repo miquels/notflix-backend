@@ -169,7 +169,7 @@ async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
         let mut coll = collections::Collection {
             name: "TV Shows".to_string(),
             collection_id: 2,
-            type_: "shows".to_string(),
+            type_: "tvshows".to_string(),
             directory: opts.directory.clone(),
             baseurl: "/".to_string(),
             ..collections::Collection::default()

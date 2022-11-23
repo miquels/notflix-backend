@@ -5,8 +5,9 @@ use poem_openapi::Object;
 
 use crate::db;
 use crate::jvec::JVec;
+use crate::models::thumb::Thumb;
 use super::nfo::build_struct;
-use super::{Rating, Thumb, UniqueId, Actor};
+use super::{Rating, UniqueId, Actor};
 use super::{FileInfo, NfoBase, is_default};
 
 #[derive(Object, Serialize, serde::Deserialize, Clone, Default, Debug, sqlx::FromRow)]

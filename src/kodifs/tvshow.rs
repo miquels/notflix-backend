@@ -5,7 +5,7 @@ use std::io;
 use chrono::TimeZone;
 
 use crate::collections::Collection;
-use crate::models::{self, TVShow, Season, FileInfo};
+use crate::models::{self, Thumb, TVShow, Season, FileInfo};
 use crate::util::SystemTimeToUnixTime;
 use super::episode::Episode;
 use super::*;
@@ -97,7 +97,7 @@ impl Show {
                 }
 
                 // Show / season images.
-                if self.tvshow_image_file(name).await {
+                if self.tvshow_image_file(coll, name).await {
                     continue;
                 }
             }
@@ -112,7 +112,7 @@ impl Show {
             let showdir = self.basedir.clone();
             let db_episode = self.get_episode_mut(basepath);
 
-            if let Some(mut ep) = Episode::new(showdir, name, basepath, season_hint, db_episode).await {
+            if let Some(mut ep) = Episode::new(coll, showdir, name, basepath, season_hint, db_episode).await {
                 ep.episode.tvshow_id = self.tvshow.id;
                 ep.episode.collection_id = coll.collection_id as i64;
                 episodes.push(ep);
@@ -140,7 +140,7 @@ impl Show {
     // Check for:
     // - tvshow images (banner, fanart, poster etc)
     // - season images (season01-poster.jpg, season-all-poster.jpg, etc)
-    async fn tvshow_image_file(&mut self, name: &str) -> bool {
+    async fn tvshow_image_file(&mut self, coll: &Collection, name: &str) -> bool {
 
         // Images that can only be found in the base directory.
         if !name.contains("/") {
@@ -153,8 +153,9 @@ impl Show {
                     "banner" | "fanart" | "folder" | "poster" => (None, &caps[1]),
                     _ => (None, ""),
                 };
+                let season = season.map(|s| s.to_string());
                 if aspect != "" {
-                    add_thumb(&mut self.tvshow.thumbs, "", name, aspect, season);
+                    let _ = Thumb::add(&mut self.tvshow.thumbs, &self.basedir, name, coll, self.tvshow.id, aspect, season).await;
                     return true;
                 }
             }
@@ -166,7 +167,7 @@ impl Show {
                 "banner" | "poster" => &caps[2],
                 _ => "poster",
             };
-            add_thumb(&mut self.tvshow.thumbs, "", name, aspect, Some(&caps[1]));
+            let _ = Thumb::add(&mut self.tvshow.thumbs, &self.basedir, name, coll, self.tvshow.id, aspect, Some(caps[1].to_string()));
             return true;
         }
 

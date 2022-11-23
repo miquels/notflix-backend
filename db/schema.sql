@@ -15,8 +15,8 @@ CREATE TABLE collections(
 -- It contains info generic for any media type.
 CREATE TABLE mediaitems (
   -- AUTOINCREMENT is important, we should not re-use mediaitems.id.
-  id integer PRIMARY KEY AUTOINCREMENT,
-  collection_id INTEGER NOT NULL,
+  id TEXT PRIMARY KEY NOT NULL,
+  collection_id TEXT NOT NULL,
   -- unix timestamp of anything contained in this item.
   lastmodified BIGINT NOT NULL,
   -- directory is a FileInfo, path + inode + size.
@@ -41,8 +41,8 @@ CREATE TABLE mediaitems (
 );
 
 CREATE TABLE movies(
-  id INTEGER PRIMARY KEY,
-  mediaitem_id INTEGER NOT NULL,
+  id TEXT PRIMARY KEY NOT NULL,
+  mediaitem_id TEXT NOT NULL,
 
   -- common to movies and tvshows
   originaltitle TEXT,
@@ -61,8 +61,8 @@ CREATE TABLE movies(
 );
 
 CREATE TABLE tvshows(
-  id INTEGER PRIMARY KEY,
-  mediaitem_id INTEGER NOT NULL,
+  id TEXT PRIMARY KEY NOT NULL,
+  mediaitem_id TEXT NOT NULL,
 
   -- common to movies and tvshows
   originaltitle TEXT,
@@ -82,9 +82,9 @@ CREATE TABLE tvshows(
 );
 
 CREATE TABLE episodes(
-  id INTEGER PRIMARY KEY,
-  mediaitem_id INTEGER NOT NULL,
-  tvshow_id INTEGER NOT NULL,
+  id TEXT PRIMARY KEY NOT NULL,
+  mediaitem_id TEXT NOT NULL,
+  tvshow_id TEXT NOT NULL,
 
  -- episode
   video JSON NOT NULL,
@@ -101,12 +101,12 @@ CREATE TABLE episodes(
 );
 
 CREATE TABLE images(
-  id INTEGER PRIMARY KEY,
-  collection_id INTEGER NOT NULL,
-  mediaitem_id INTEGER NOT NULL,
+  id TEXT PRIMARY KEY NOT NULL,
+  collection_id TEXT NOT NULL,
+  mediaitem_id TEXT NOT NULL,
 
   -- Variants have the same image_id. Original has id == image_id.
-  image_id INTEGER NOT NULL,
+  image_id TEXT NOT NULL,
 
   -- path, mtime, size.
   fileinfo JSON NOT NULL,
@@ -129,7 +129,7 @@ CREATE INDEX idx_images_image_id ON images(image_id);
 
 CREATE TABLE uniqueids(
   id INTEGER PRIMARY KEY,
-  mediaitem_id INTEGER NOT NULL,
+  mediaitem_id TEXT NOT NULL,
 
   -- type is imdb, or tvdb, etc
   idtype TEXT NOT NULL,

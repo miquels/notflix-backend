@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use poem_openapi::Object;
 
-use super::is_default;
+use super::{Thumb, is_default};
 use crate::sqlx::impl_sqlx_traits_for;
 
 #[derive(Object, Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
@@ -19,21 +19,6 @@ pub struct Actor {
     pub thumb_url:  Option<String>,
 }
 impl_sqlx_traits_for!(Actor);
-
-/// Image
-#[derive(Object, Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-#[serde(default)]
-pub struct Thumb {
-    #[serde(rename(deserialize = "$value"))]
-    pub path:     String,
-    pub aspect:   String,
-    #[serde(skip_serializing_if = "is_default")]
-    pub season:  Option<String>,
-    #[serde(skip)]
-    #[oai(skip)]
-    pub state: ThumbState,
-}
-impl_sqlx_traits_for!(Thumb);
 
 #[derive(Object, Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
 #[serde(default)]
@@ -60,11 +45,3 @@ pub struct UniqueId {
     pub id: String,
 }
 impl_sqlx_traits_for!(UniqueId);
-
-#[derive(Clone, Debug, Default, PartialEq)]
-pub enum ThumbState {
-    Deleted,
-    #[default]
-    Unchanged,
-    New,
-}

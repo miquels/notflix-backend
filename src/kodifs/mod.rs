@@ -3,9 +3,8 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use url::Url;
 
-use crate::models::{self, Thumb, ThumbState};
+use crate::models;
 use crate::collections::Collection;
-use crate::jvec::JVec;
 
 mod movie;
 mod tvshow;
@@ -68,42 +67,6 @@ pub fn join_and_escape_path(subdir: Option<&str>, name: &str) -> String {
         Some(d) => escape_path(&format!("{}/{}", d, name)),
         None => escape_path(name),
     }
-}
-
-// Add a thumb to a Vec of Thumbs.
-// If the thumb was already present, we change nothing and return `false` (no update).
-// If the thumb was _not_ already present, we return `true` (updated).
-fn add_thumb(thumbs: &mut JVec<Thumb>, _dir: &str, name: impl Into<String>, aspect: impl Into<String>, season: Option<&str>) -> bool {
-    let name = name.into();
-    let aspect = aspect.into();
-
-    let season = season.map(|mut s| {
-        while s.len() > 1 && s.starts_with("0") {
-            s = &s[1..];
-        }
-        s.to_string()
-    });
-
-    let t = Thumb {
-        path: name,
-        aspect,
-        season,
-        state: ThumbState::New,
-    };
-
-    // See if this thumb was already present.
-    let e = thumbs.0
-        .iter_mut()
-        .find(|x| x.path == t.path && x.aspect == t.aspect && x.season == x.season);
-    if let Some(x) = e {
-        // Yep, so it's unchanged.
-        x.state = ThumbState::Unchanged;
-        return false;
-    }
-
-    // No, so push it as new.
-    thumbs.0.push(t);
-    true
 }
 
 // The list must be sorted. If this function is called for multiple

@@ -2,7 +2,7 @@ use std::time::SystemTime;
 use chrono::TimeZone;
 
 use crate::collections::*;
-use crate::models::{FileInfo, Movie};
+use crate::models::{FileInfo, Movie, Thumb};
 use crate::util::SystemTimeToUnixTime;
 use super::*;
 
@@ -142,7 +142,7 @@ pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<
                 "clearlogo" => aux,
                 _ => continue,
             };
-            add_thumb(&mut movie.thumbs, "", name, aspect, None);
+            let _ = Thumb::add(&mut movie.thumbs, &dirpath, name, coll, movie.id, aspect, None).await;
         }
 
         // XXX TODO: subtitles srt/vtt
