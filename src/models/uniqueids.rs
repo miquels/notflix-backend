@@ -5,15 +5,17 @@ use poem_openapi::Object;
 use crate::db;
 use crate::models::UniqueId;
 use crate::sqlx::impl_sqlx_traits_for;
+use crate::util::Id;
 
 #[derive(Object, Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
 pub struct UniqueIds {
-    pub mediaitem_id: i64,
+    #[oai(read_only)]
+    pub mediaitem_id: Id,
 }
 impl_sqlx_traits_for!(UniqueIds);
 
 impl UniqueIds {
-    pub fn new(mediaitem_id: i64) -> UniqueIds {
+    pub fn new(mediaitem_id: Id) -> UniqueIds {
         // println!("UniqueIds::new({mediaitem_id})");
         UniqueIds {
             mediaitem_id,
@@ -21,7 +23,7 @@ impl UniqueIds {
         }
     }
 
-    pub async fn get_mediaitem_id(dbh: &mut db::TxnHandle<'_>, uids: &[UniqueId]) -> Result<Option<i64>> {
+    pub async fn get_mediaitem_id(dbh: &mut db::TxnHandle<'_>, uids: &[UniqueId]) -> Result<Option<Id>> {
 
         if uids.len() == 0 {
             return Ok(None);
@@ -31,7 +33,7 @@ impl UniqueIds {
 
         // First, build the query.
         let mut query_str = String::from(
-            r#"SELECT mediaitem_id
+            r#"SELECT mediaitem_id AS "mediaitem_id!: Id"
                FROM uniqueids"#
         );
         for idx in 0 .. uids.len() {
@@ -44,7 +46,7 @@ impl UniqueIds {
         }
 
         // Now build the basic query and bind the args.
-        let mut query = sqlx::query_as::<_, (i64,)>(&query_str);
+        let mut query = sqlx::query_as::<_, (Id,)>(&query_str);
         for uid in uids {
             query = query.bind(&uid.idtype);
             query = query.bind(&uid.id);
@@ -60,7 +62,7 @@ impl UniqueIds {
         }
 
         // FIXME: check if there's only one unique mediaitem_id.
-        Ok(Some(rows[0].0))
+        Ok(Some(rows[0].0.clone()))
     }
 
     pub async fn update(&self, txn: &mut db::TxnHandle<'_>, uids: &[UniqueId]) -> Result<()> {

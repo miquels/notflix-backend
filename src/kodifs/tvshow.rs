@@ -6,7 +6,7 @@ use chrono::TimeZone;
 
 use crate::collections::Collection;
 use crate::models::{self, Thumb, TVShow, Season, FileInfo};
-use crate::util::SystemTimeToUnixTime;
+use crate::util::{Id, SystemTimeToUnixTime};
 use super::episode::Episode;
 use super::*;
 
@@ -180,6 +180,7 @@ impl Show {
         let basedir = fileinfo.fullpath.clone();
 
         let tvshow = db_tvshow.unwrap_or_else(|| Box::new(TVShow {
+            id: Id::new(),
             collection_id: coll.collection_id as i64,
             lastmodified: SystemTime::now().unixtime_ms(),
             ..TVShow::default()

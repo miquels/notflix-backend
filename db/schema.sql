@@ -55,9 +55,9 @@ CREATE TABLE movies(
 
   -- movie
   video JSON NOT NULL,
-  runtime INTEGER,
+  runtime INTEGER
 
-  FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
+--  FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
 );
 
 CREATE TABLE tvshows(
@@ -101,8 +101,8 @@ CREATE TABLE episodes(
 );
 
 CREATE TABLE images(
-  id TEXT PRIMARY KEY NOT NULL,
-  collection_id TEXT NOT NULL,
+  id INTEGER PRIMARY KEY,
+  collection_id INTEGER NOT NULL,
   mediaitem_id TEXT NOT NULL,
 
   -- Variants have the same image_id. Original has id == image_id.

@@ -7,6 +7,7 @@ use serde::{Serialize, Deserialize};
 
 use crate::collections::Collection;
 use crate::db;
+use crate::util::Id;
 use super::FileInfo;
 
 /// Image
@@ -15,7 +16,7 @@ use super::FileInfo;
 pub struct Image {
     pub id: i64,
     pub collection_id: i64,
-    pub mediaitem_id: i64,
+    pub mediaitem_id: Id,
     pub image_id: i64,
     pub extra: Option<sqlx::types::Json<HashMap<String, String>>>,
     pub fileinfo: FileInfo,
@@ -56,9 +57,7 @@ impl GetImage {
     ///
     /// Can query either by mediaitem_id (gets al images for one mediaitem),
     /// or specific image_id (gets all variants).
-    pub async fn find(dbh: &mut db::TxnHandle<'_>, coll: &Collection, mediaitem_id: Option<i64>, image_id: Option<i64>, cache_dir: &str) -> Result<Vec<GetImage>> {
-        let mediaitem_id2 = mediaitem_id.unwrap_or(-1);
-        let image_id2 = image_id.unwrap_or(-1);
+    pub async fn find(dbh: &mut db::TxnHandle<'_>, coll: &Collection, mediaitem_id: Option<Id>, image_id: Option<i64>, cache_dir: &str) -> Result<Vec<GetImage>> {
 
         let mut rows = sqlx::query!(
             r#"
@@ -75,8 +74,8 @@ impl GetImage {
                 FROM images t JOIN mediaitems m ON t.mediaitem_id = m.id
                 WHERE t.mediaitem_id = ? OR t.image_id = ?
                 ORDER BY t.id != t.image_id"#,
-            mediaitem_id2,
-            image_id2,
+            mediaitem_id,
+            image_id,
         )
         .fetch(dbh);
 

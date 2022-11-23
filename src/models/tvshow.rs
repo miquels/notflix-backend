@@ -5,7 +5,7 @@ use poem_openapi::Object;
 
 use crate::jvec::JVec;
 use crate::db::{self, FindItemBy};
-use crate::util::some_or_return;
+use crate::util::{Id, some_or_return};
 use super::nfo::build_struct;
 use super::{Actor, Rating, Thumb, UniqueId};
 use super::{Episode, NfoBase, NfoMovie, FileInfo, is_default};
@@ -14,7 +14,8 @@ use super::{Episode, NfoBase, NfoMovie, FileInfo, is_default};
 #[serde(default)]
 pub struct TVShow {
     // Common.
-    pub id: i64,
+    #[oai(read_only)]
+    pub id: Id,
     pub collection_id: i64,
     #[oai(skip)]
     pub directory: FileInfo,
@@ -75,7 +76,7 @@ impl TVShow {
         // Find the item in the database.
         let row = sqlx::query!(
             r#"
-                SELECT i.id AS "id: i64",
+                SELECT i.id AS "id!: Id",
                        i.collection_id AS "collection_id: i64",
                        i.directory AS "directory!: FileInfo",
                        i.deleted AS "deleted!: bool",
@@ -133,11 +134,12 @@ impl TVShow {
         Ok(Some(Box::new(m)))
     }
 
-    pub async fn insert(&mut self, txn: &mut db::TxnHandle<'_>) -> Result<()> {
-        self.id = sqlx::query!(
+    pub async fn insert(&self, txn: &mut db::TxnHandle<'_>) -> Result<()> {
+        sqlx::query!(
             r#"
                 INSERT INTO mediaitems(
                     type,
+                    id,
                     collection_id,
                     directory,
                     deleted,
@@ -153,7 +155,8 @@ impl TVShow {
                     actors,
                     credits,
                     directors
-                ) VALUES("tvshow", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES("tvshow", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+            self.id,
             self.collection_id,
             self.directory,
             self.deleted,
@@ -171,12 +174,13 @@ impl TVShow {
             self.nfo_base.directors,
         )
         .execute(&mut *txn)
-        .await?
-        .last_insert_rowid();
+        .await?;
 
+        let id = Id::new();
         sqlx::query!(
             r#"
                 INSERT INTO tvshows(
+                    id,
                     mediaitem_id,
                     originaltitle,
                     sorttitle,
@@ -188,7 +192,8 @@ impl TVShow {
                     seasons,
                     episodes,
                     status
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES(?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+            id,
             self.id,
             self.nfo_movie.originaltitle,
             self.nfo_movie.sorttitle,
@@ -205,9 +210,8 @@ impl TVShow {
         .await?;
 
         // Now the episodes.
-        for season in &mut self.seasons {
-            for episode in &mut season.episodes {
-                episode.tvshow_id = self.id;
+        for season in &self.seasons {
+            for episode in &season.episodes {
                 episode.insert(&mut *txn).await?;
             }
         }

@@ -6,6 +6,7 @@ use poem_openapi::{
 };
 use super::Api;
 use crate::models;
+use crate::util::Id;
 
 pub use crate::collections::Collection;
 
@@ -24,11 +25,12 @@ pub enum GetCollectionsResponse<'a> {
 #[derive(Object)]
 pub struct MediaItem {
     /// Unique ID
-    pub id:     i64,
+    #[oai(read_only)]
+    pub id:     Id,
     /// Title
     pub title:  String,
-    /// URL to the thumbnail
-    pub poster: Option<String>,
+    /// Thumbnail
+    pub poster: Option<models::Thumb>,
 }
 
 #[derive(ApiResponse)]
@@ -59,11 +61,10 @@ impl Api {
         };
         let mut items = models::MediaInfo::get_all(&self.state.db.handle, coll.collection_id as i64, coll.subtype()).await?;
         let m = items.drain(..).map(|i| {
-                let poster = i.poster.map(|_| format!("/api/images/{}/{}/poster.jpg", collection_id, i.id));
                 MediaItem {
                     id: i.id,
                     title: i.title,
-                    poster,
+                    poster: i.poster,
                 }
             })
             .collect::<Vec<_>>();

@@ -12,6 +12,7 @@ use sqlx::sqlite::SqlitePool;
 use crate::collections::Collection;
 use crate::models::{MediaItem, Movie, TVShow, UniqueId, UniqueIds};
 use crate::kodifs::{KodiFS, scandirs};
+use crate::util::Id;
 
 pub type DbHandle = SqlitePool;
 pub type TxnHandle<'a> = sqlx::Transaction<'a, sqlx::Sqlite>;
@@ -60,7 +61,7 @@ impl Db {
     }
 
     // Update one movie.
-    pub async fn update_movie<M>(&self, coll: &Collection, name: &str, txn: &mut TxnHandle<'_>) -> Result<Option<i64>>
+    pub async fn update_movie<M>(&self, coll: &Collection, name: &str, txn: &mut TxnHandle<'_>) -> Result<Option<Id>>
     where
         M: MediaItem,
         M: KodiFS,
@@ -106,9 +107,10 @@ impl Db {
            db_item.undelete();
         }
         let old_lastmodified = db_item.as_ref().map(|m| m.lastmodified()).unwrap_or(0);
+        let is_new = db_item.is_none();
 
         // Now scan the item's directory.
-        let mut item = match M::scan_directory(coll, name, db_item, false).await {
+        let item = match M::scan_directory(coll, name, db_item, false).await {
             Some(mv) => mv,
             None => {
                 // FIXME This is an error, but non-fatal, the transaction was not aborted.
@@ -119,8 +121,7 @@ impl Db {
         };
 
         // insert or update?
-        if item.id() == 0 {
-            // No ID yet, so it doesn't exist in the database.
+        if is_new {
             log::debug!("Db::update_mediaitem: adding new item to the db: {}", name);
             item.insert(&mut *txn).await
                 .with_context(|| format!("failed to insert db for {}", name))?;
@@ -133,14 +134,17 @@ impl Db {
             log::trace!("Db::update_mediaitem: no update needed for: {}", name);
         }
 
+        log::trace!("checking UniqueIds..");
         if let Some(nfo_lastmodified) = item.nfo_lastmodified() {
             if nfo_lastmodified > old_lastmodified {
+                log::trace!("updating UniqueIds..");
                 let uids = UniqueIds::new(item.id());
                 uids.update(&mut *txn, item.uniqueids()).await
                     .with_context(|| format!("failed to update uniqueids table for {}", name))?;
             }
         }
 
+        log::trace!("done.");
         Ok(Some(item.id()))
     }
 
@@ -190,7 +194,7 @@ impl Db {
 
         #[derive(Default)]
         struct DbItem {
-            id: i64,
+            id: Id,
             dir: String,
             lastmodified: i64,
             keep: bool,
@@ -201,7 +205,7 @@ impl Db {
         let mut items = sqlx::query_as!(
             DbItem,
             r#"
-                SELECT id,
+                SELECT id AS "id!: Id",
                        json_extract(directory, '$.path') AS "dir!: String",
                        lastmodified,
                        0 AS "keep!: bool"
@@ -284,7 +288,7 @@ impl Db {
     }
 
     // Lookup a movie or tvshow in the database and return it's ID.
-    pub async fn lookup(&self, by: &FindItemBy<'_>) -> Result<Option<i64>> {
+    pub async fn lookup(&self, by: &FindItemBy<'_>) -> Result<Option<Id>> {
         let mut txn = self.handle.begin().await?;
         let res = lookup(&mut txn, by).await?;
         txn.commit().await?;
@@ -293,10 +297,10 @@ impl Db {
 }
 
 // Lookup a movie or tvshow in the database and return it's ID.
-pub async fn lookup(txn: &mut TxnHandle<'_>, by: &FindItemBy<'_>) -> Result<Option<i64>> {
+pub async fn lookup(txn: &mut TxnHandle<'_>, by: &FindItemBy<'_>) -> Result<Option<Id>> {
     let id = sqlx::query!(
         r#"
-            SELECT  i.id
+            SELECT  i.id AS "id!: Id"
             FROM mediaitems i
             WHERE (? IS NULL OR collection_id = ?)
               AND (id = ? OR json_extract(directory, '$.path') = ? OR title = ?)"#,
@@ -320,7 +324,7 @@ pub async fn lookup(txn: &mut TxnHandle<'_>, by: &FindItemBy<'_>) -> Result<Opti
 
 #[derive(Default, Debug)]
 pub struct FindItemBy<'a> {
-    pub id: Option<i64>,
+    pub id: Option<Id>,
     pub collection_id: Option<i64>,
     pub directory: Option<&'a str>,
     pub title: Option<&'a str>,
@@ -334,7 +338,7 @@ impl<'a> FindItemBy<'a> {
         FindItemBy::default()
     }
 
-    pub fn id(id: i64, deleted_too: bool) -> FindItemBy<'a> {
+    pub fn id(id: Id, deleted_too: bool) -> FindItemBy<'a> {
         FindItemBy { id: Some(id), deleted_too, ..FindItemBy::default() }
     }
 
@@ -350,7 +354,7 @@ impl<'a> FindItemBy<'a> {
             ..FindItemBy::default() }
     }
 
-    pub(crate) fn is_only_id(&self) -> Option<i64> {
+    pub(crate) fn is_only_id(&self) -> Option<Id> {
         if let Some(id) = self.id {
             if self.title.is_none() &&
                self.directory.is_none() &&

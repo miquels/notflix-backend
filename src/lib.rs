@@ -7,6 +7,7 @@ pub mod collections;
 // pub mod data;
 pub mod db;
 pub mod genres;
+pub(crate) mod id;
 pub mod kodifs;
 pub mod models;
 pub mod server;

@@ -2,7 +2,7 @@ use chrono::TimeZone;
 
 use crate::collections::Collection;
 use crate::models::{self, FileInfo, Thumb};
-use crate::util::SystemTimeToUnixTime;
+use crate::util::{Id, SystemTimeToUnixTime};
 use super::*;
 
 #[derive(Debug)]
@@ -30,10 +30,12 @@ impl<'c> Episode<'c> {
             Err(_) => return None,
         };
 
-        let mut episode = models::Episode::default();
+        let mut episode = models::Episode {
+            id: Id::new(),
+            ..models::Episode::default()
+        };
         if let Some(db_episode) = db_episode {
             std::mem::swap(&mut episode, db_episode);
-            db_episode.id = 0;
             db_episode.deleted = true;
             episode.deleted = false;
         }

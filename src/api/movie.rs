@@ -7,6 +7,7 @@ use super::Api;
 use crate::db::FindItemBy;
 
 pub use crate::models::Movie;
+use crate::util::Id;
 
 #[derive(ApiResponse)]
 pub enum GetMovieResponse {
@@ -20,7 +21,7 @@ pub enum GetMovieResponse {
 }
 
 impl Api {
-    pub async fn get_movie(&self, collection_id: i64, movie_id: i64) -> Result<GetMovieResponse> {
+    pub async fn get_movie(&self, collection_id: i64, movie_id: Id) -> Result<GetMovieResponse> {
         let collections = &self.state.config.collections;
         let _coll = match collections.iter().find(|c| c.collection_id as i64 == collection_id) {
             Some(coll) => coll,

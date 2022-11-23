@@ -106,6 +106,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "983cd8b9d4b02a6dc6ffa557262eb5858a27a0038ffffe21a0f133eaa819a164"
 
 [[package]]
+name = "arraystring"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d517c467117e1d8ca795bc8cc90857ff7f79790cca0e26f6e9462694ece0185"
+dependencies = [
+ "serde",
+ "typenum",
+]
+
+[[package]]
 name = "async-recursion"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1396,6 +1406,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arc-swap",
+ "arraystring",
  "async-recursion",
  "async-stream",
  "async-trait",
@@ -1430,6 +1441,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "typenum",
  "url",
 ]
 

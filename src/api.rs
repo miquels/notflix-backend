@@ -6,6 +6,7 @@ use poem_openapi::{
 use poem::{Result, Request};
 
 use crate::server::{SharedState, SessionIdAuthorization};
+use crate::util::Id;
 
 mod collection;
 mod movie;
@@ -77,15 +78,15 @@ impl Api {
 
     /// Find tvshow by id.
     #[oai(path = "/tvshow/:collection_id/:tvshow_id", method = "get", tag = "ApiTags::Media")]
-    async fn api_get_tvshow(&self, _session: Session, collection_id: Path<i64>, tvshow_id: Path<i64>) -> Result<GetTVShowResponse> {
-        let res = self.get_tvshow(collection_id.0, tvshow_id.0).await?;
+    async fn api_get_tvshow(&self, _session: Session, collection_id: Path<i64>, tvshow_id: Path<String>) -> Result<GetTVShowResponse> {
+        let res = self.get_tvshow(collection_id.0, Id::from_str(&tvshow_id.0)?).await?;
         Ok(res)
     }
 
     /// Find movie by id.
     #[oai(path = "/movie/:collection_id/:movie_id", method = "get", tag = "ApiTags::Media")]
-    async fn api_get_movie(&self, _session: Session, collection_id: Path<i64>, movie_id: Path<i64>) -> Result<GetMovieResponse> {
-        let res = self.get_movie(collection_id.0, movie_id.0).await?;
+    async fn api_get_movie(&self, _session: Session, collection_id: Path<i64>, movie_id: Path<String>) -> Result<GetMovieResponse> {
+        let res = self.get_movie(collection_id.0, Id::from_str(&movie_id.0)?).await?;
         Ok(res)
     }
 

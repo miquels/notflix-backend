@@ -4,6 +4,7 @@ use poem_openapi::Object;
 
 use crate::db::{self, FindItemBy};
 use crate::jvec::JVec;
+use crate::util::Id;
 use super::nfo::build_struct;
 use super::{Rating, Thumb, UniqueId, Actor};
 use super::{NfoBase, NfoMovie, FileInfo, is_default};
@@ -12,7 +13,8 @@ use super::{NfoBase, NfoMovie, FileInfo, is_default};
 #[serde(default)]
 pub struct Movie {
     // Common.
-    pub id: i64,
+    #[oai(read_only)]
+    pub id: Id,
     pub collection_id: i64,
     #[oai(skip)]
     pub directory: FileInfo,
@@ -60,7 +62,7 @@ impl Movie {
         // Find the item in the database.
         let r = sqlx::query!(
             r#"
-                SELECT i.id AS "id: i64",
+                SELECT i.id AS "id: Id",
                        i.collection_id AS "collection_id: i64",
                        i.directory AS "directory!: FileInfo",
                        i.deleted AS "deleted!: bool",
@@ -110,12 +112,12 @@ impl Movie {
         Ok(Some(Box::new(m)))
     }
 
-    pub async fn insert(&mut self, txn: &mut db::TxnHandle<'_>) -> Result<()> {
-        let old_id = self.id;
-        self.id = sqlx::query!(
+    pub async fn insert(&self, txn: &mut db::TxnHandle<'_>) -> Result<()> {
+        sqlx::query!(
             r#"
                 INSERT INTO mediaitems(
                     type,
+                    id,
                     collection_id,
                     directory,
                     deleted,
@@ -131,7 +133,8 @@ impl Movie {
                     actors,
                     credits,
                     directors
-                ) VALUES("movie", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES("movie", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+            self.id,
             self.collection_id,
             self.directory,
             self.deleted,
@@ -149,26 +152,13 @@ impl Movie {
             self.nfo_base.directors
         )
         .execute(&mut *txn)
-        .await?
-        .last_insert_rowid();
+        .await?;
 
-        if old_id != 0 {
-            sqlx::query!(
-                r#"
-                    UPDATE mediaitems
-                    SET id = ?
-                    WHERE id = ?"#,
-                old_id,
-                self.id
-            )
-            .execute(&mut *txn)
-            .await?;
-            self.id = old_id;
-        }
-
+        let id = Id::new();
         sqlx::query!(
             r#"
                 INSERT INTO movies(
+                    id,
                     mediaitem_id,
                     originaltitle,
                     sorttitle,
@@ -179,7 +169,8 @@ impl Movie {
                     mpaa,
                     runtime,
                     video
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+            id,
             self.id,
             self.nfo_movie.originaltitle,
             self.nfo_movie.sorttitle,

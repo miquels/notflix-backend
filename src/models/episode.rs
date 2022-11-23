@@ -6,6 +6,7 @@ use poem_openapi::Object;
 use crate::db;
 use crate::jvec::JVec;
 use crate::models::thumb::Thumb;
+use crate::util::Id;
 use super::nfo::build_struct;
 use super::{Rating, UniqueId, Actor};
 use super::{FileInfo, NfoBase, is_default};
@@ -14,10 +15,12 @@ use super::{FileInfo, NfoBase, is_default};
 #[serde(default)]
 pub struct Episode {
     // Common.
-    pub id: i64,
+    #[oai(read_only)]
+    pub id: Id,
     #[oai(skip)]
     pub collection_id: i64,
-    pub tvshow_id: i64,
+    #[oai(read_only)]
+    pub tvshow_id: Id,
     #[oai(skip)]
     pub directory: FileInfo,
     #[oai(skip)]
@@ -57,15 +60,15 @@ pub struct Episode {
 }
 
 impl Episode {
-    pub async fn select_one(dbh: &mut db::TxnHandle<'_>, episode_id: i64) -> Result<Option<Episode>> {
+    pub async fn select_one(dbh: &mut db::TxnHandle<'_>, episode_id: Id) -> Result<Option<Episode>> {
         let mut v = Episode::select(dbh, None, None, Some(episode_id)).await?;
         Ok(v.pop())
     }
 
-    pub async fn select(dbh: &mut db::TxnHandle<'_>, tvshow_id: Option<i64>, season_id: Option<i64>, episode_id: Option<i64>) -> Result<Vec<Episode>> {
+    pub async fn select(dbh: &mut db::TxnHandle<'_>, tvshow_id: Option<Id>, season: Option<i64>, episode_id: Option<Id>) -> Result<Vec<Episode>> {
         let mut rows = sqlx::query!(
             r#"
-                SELECT i.id AS "id!: i64",
+                SELECT i.id AS "id!: Id",
                        i.collection_id AS "collection_id: i64",
                        i.directory AS "directory!: FileInfo",
                        i.deleted AS "deleted!: bool",
@@ -79,7 +82,7 @@ impl Episode {
                        i.actors AS "actors!: JVec<Actor>",
                        i.credits AS "credits!: JVec<String>",
                        i.directors AS "directors!: JVec<String>",
-                       m.tvshow_id,
+                       m.tvshow_id AS "tvshow_id!: Id",
                        m.aired,
                        m.runtime AS "runtime: u32",
                        m.displayseason AS "displayseason: u32",
@@ -96,10 +99,10 @@ impl Episode {
                 ORDER BY m.season, m.episode"#,
             tvshow_id,
             tvshow_id,
-            season_id,
-            season_id,
+            season,
+            season,
             episode_id,
-            episode_id
+            episode_id,
         )
         .fetch(dbh);
 
@@ -124,11 +127,12 @@ impl Episode {
         self.displayepisode = other.displayepisode;
     }
 
-    pub async fn insert(&mut self, txn: &mut db::TxnHandle<'_>) -> Result<()> {
-        self.id = sqlx::query!(
+    pub async fn insert(&self, txn: &mut db::TxnHandle<'_>) -> Result<()> {
+        sqlx::query!(
             r#"
                 INSERT INTO mediaitems(
                     type,
+                    id,
                     collection_id,
                     directory,
                     lastmodified,
@@ -143,7 +147,8 @@ impl Episode {
                     actors,
                     credits,
                     directors
-                ) VALUES("episode", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES("episode", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+            self.id,
             self.collection_id,
             self.directory,
             self.lastmodified,
@@ -160,12 +165,13 @@ impl Episode {
             self.nfo_base.directors
         )
         .execute(&mut *txn)
-        .await?
-        .last_insert_rowid();
+        .await?;
 
+        let id = Id::new();
         sqlx::query!(
             r#"
                 INSERT INTO episodes(
+                    id,
                     mediaitem_id,
                     tvshow_id,
                     aired,
@@ -175,7 +181,8 @@ impl Episode {
                     video,
                     season,
                     episode
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+            id,
             self.id,
             self.tvshow_id,
             self.aired,

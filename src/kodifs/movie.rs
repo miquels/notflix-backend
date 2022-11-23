@@ -3,7 +3,7 @@ use chrono::TimeZone;
 
 use crate::collections::*;
 use crate::models::{FileInfo, Movie, Thumb};
-use crate::util::SystemTimeToUnixTime;
+use crate::util::{Id, SystemTimeToUnixTime};
 use super::*;
 
 pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<Box<Movie>>, only_nfo: bool) -> Option<Box<Movie>> {
@@ -41,6 +41,7 @@ pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<
 
     // Initial Movie.
     let mut movie = dbent.unwrap_or_else(|| Box::new(Movie {
+        id: Id::new(),
         collection_id: coll.collection_id as i64,
         video: video,
         ..Movie::default()

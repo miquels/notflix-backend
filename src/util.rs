@@ -2,9 +2,11 @@ use std::time::{Duration, SystemTime};
 use std::fmt;
 use std::ops::Deref;
 
-use rand::Rng;
+use serde::{Serialize, Deserialize};
 
 use crate::sqlx::impl_sqlx_traits_for;
+
+pub use crate::id::Id;
 
 pub trait SystemTimeToUnixTime {
     fn unixtime(&self) -> i64;
@@ -39,7 +41,7 @@ impl SystemTimeToUnixTime for SystemTime {
 // even export it completely - for example, you can't get at `Duration`.
 // So implement our own Rfc3339Time, based on humantime_serde which
 // we need anyway.
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Rfc3339Time(pub humantime_serde::Serde<SystemTime>);
 impl_sqlx_traits_for!(Rfc3339Time, text);
 
@@ -69,62 +71,6 @@ impl Deref for Rfc3339Time {
 impl fmt::Display for Rfc3339Time {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         serde_plain::to_string(&self.0).map_err(|_| fmt::Error)?.fmt(f)
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
-#[serde(transparent)]
-pub struct Id(String);
-
-impl Id {
-    /// Generate a base62 encoded unique (random) id of `len` characters.
-    /// Maximum length is 22, which can encode 128 bits of data.
-    /// Length 20 contains about 125 bits of random data.
-    pub fn new_with_len(len: usize) -> Id {
-        let mut id = String::new();
-
-        let len = std::cmp::min(len, 22);
-        let max = if len < 22 {
-            62u128.pow(len as u32)
-        } else {
-            u128::MAX
-        };
-        let mut rng = rand::thread_rng();
-        let mut n = rng.gen_range(0 ..= max);
-
-        // into base62.
-        for _ in 0 .. len {
-            let m = (n % 62) as u8;
-            n /= 62;
-            let c = match m {
-                0 ..= 9 => m + b'0',
-                10 ..= 35 => m - 10 + b'A',
-                36 ..= 61 => m - 36 + b'a',
-                _ => unreachable!(),
-            };
-            id.push(c.into());
-        }
-
-        Id(id)
-    }
-
-    /// Default length is 20.
-    pub fn new() -> Id {
-        Id::new_with_len(20)
-    }
-}
-
-impl fmt::Display for Id {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        self.0.fmt(f)
-    }
-}
-
-impl Deref for Id {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.as_str()
     }
 }
 

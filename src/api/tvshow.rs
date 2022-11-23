@@ -5,6 +5,7 @@ use poem_openapi::{
 };
 use super::Api;
 use crate::db::FindItemBy;
+use crate::util::Id;
 
 pub use crate::models::TVShow;
 
@@ -20,7 +21,7 @@ pub enum GetTVShowResponse {
 }
 
 impl Api {
-    pub async fn get_tvshow(&self, collection_id: i64, tvshow_id: i64) -> Result<GetTVShowResponse> {
+    pub async fn get_tvshow(&self, collection_id: i64, tvshow_id: Id) -> Result<GetTVShowResponse> {
         let collections = &self.state.config.collections;
         let _coll = match collections.iter().find(|c| c.collection_id as i64 == collection_id) {
             Some(coll) => coll,
