@@ -1338,6 +1338,7 @@ dependencies = [
  "headers",
  "http",
  "http-body",
+ "hyper",
  "isolang",
  "libc",
  "log",
@@ -1370,15 +1371,6 @@ dependencies = [
  "spin 0.9.4",
  "tokio",
  "version_check",
-]
-
-[[package]]
-name = "nanoid"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ffa00dec017b5b1a8b7cf5e2c008bfda1aa7e0697ac1508b491fdf2622fb4d8"
-dependencies = [
- "rand 0.8.5",
 ]
 
 [[package]]
@@ -1423,7 +1415,6 @@ dependencies = [
  "image",
  "log",
  "mp4lib",
- "nanoid",
  "once_cell",
  "poem",
  "poem-openapi",
@@ -1435,7 +1426,6 @@ dependencies = [
  "serde_json",
  "serde_plain",
  "sha-crypt",
- "slab",
  "sqlx",
  "structopt",
  "tokio",
@@ -1659,8 +1649,10 @@ dependencies = [
  "futures-util",
  "headers",
  "http",
+ "httpdate",
  "hyper",
  "mime",
+ "mime_guess",
  "multer",
  "parking_lot",
  "percent-encoding",

@@ -2,7 +2,7 @@ use std::time::{Duration, SystemTime};
 use anyhow::Result;
 
 use crate::db;
-use crate::util::{Rfc3339Time, some_or_return};
+use crate::util::{Id, Rfc3339Time, some_or_return};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Session {
@@ -15,13 +15,7 @@ impl Session {
 
     // Create new session.
     pub async fn create(txn: &mut db::TxnHandle<'_>, user_id: i64, username: &str) -> Result<Session> {
-        let sessionid = loop {
-            let id = nanoid::nanoid!();
-            if id.starts_with("-") || id.starts_with("_") || id.ends_with("-") || id.ends_with("_") {
-                continue;
-            }
-            break id;
-        };
+        let sessionid = Id::new().to_string();
         let now = Rfc3339Time::new(SystemTime::now());
 
         sqlx::query!(

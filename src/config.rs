@@ -10,14 +10,6 @@ use serde::Deserialize;
 use crate::collections::Collection;
 
 #[derive(Deserialize)]
-pub struct Config {
-    pub server: Server,
-    pub session: Session,
-    #[serde(rename = "collection")]
-    pub collections: Vec<Collection>,
-}
-
-#[derive(Deserialize)]
 pub struct Server {
     #[serde(default)]
     pub cachedir: Option<String>,
@@ -45,6 +37,20 @@ pub struct Session {
     #[serde(default)]
     #[serde(with = "humantime_serde")]
     pub timeout: Option<Duration>,
+}
+
+#[derive(Deserialize)]
+pub struct Config {
+    pub server: Server,
+    pub session: Session,
+    #[serde(rename = "collection")]
+    pub collections: Vec<Collection>,
+}
+
+impl Config {
+    pub fn get_collection(&self, id: u32) -> Option<&Collection> {
+        self.collections.iter().find(|c| c.collection_id == id)
+    }
 }
 
 pub fn from_file(path: &str) -> anyhow::Result<Config> {

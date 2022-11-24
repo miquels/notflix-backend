@@ -9,8 +9,8 @@ use poem::{
     Request,
 };
 
-use super::{Api, Authenticate, Session};
-use crate::models;
+use super::{Api, Authenticate};
+use crate::models::{self, Session};
 use crate::util::some_or_return;
 
 /// Create user schema
@@ -228,13 +228,13 @@ impl Api {
         let jar = req.cookie();
         if let Some(cookie) = jar.get("x-session-id") {
             // In a cookie?
-            session =  models::Session::find(&mut txn, cookie.value_str(), d).await?;
+            session =  Session::find(&mut txn, cookie.value_str(), d).await?;
         }
 
         if session.is_none() {
             // In the x-session-id header?
             if let Some(sessionid) = req.header("x-session-id") {
-                session = models::Session::find(&mut txn, sessionid, d).await?;
+                session = Session::find(&mut txn, sessionid, d).await?;
             }
         }
 
@@ -243,7 +243,7 @@ impl Api {
 
         if session.is_none() {
             // Create new session.
-            session = Some(models::Session::create(&mut txn, user.id, &user.username).await?);
+            session = Some(Session::create(&mut txn, user.id, &user.username).await?);
         }
 
         txn.commit().await?;
@@ -252,6 +252,7 @@ impl Api {
         // Create cookie.
         let mut cookie = Cookie::new_with_str("x-session-id", &session.sessionid);
         cookie.set_http_only(true);
+        cookie.set_secure(true);
         cookie.set_path("/");
         cookie.set_same_site(SameSite::Lax);
         cookie.make_permanent();
@@ -264,7 +265,7 @@ impl Api {
 
     pub async fn logout(&self, session: Session, req: &Request) -> Result<Response<LogoutResponse>> {
         let mut txn = self.state.db.handle.begin().await?;
-        models::Session::delete(&mut txn, &session.0.sessionid).await?;
+        Session::delete(&mut txn, &session.sessionid).await?;
         txn.commit().await?;
 
         // We need to build a response manually, we have to add the set-cookie header.

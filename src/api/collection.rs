@@ -59,7 +59,7 @@ impl Api {
             Some(coll) => coll,
             None => return Ok(GetThumbsResponse::NotFound),
         };
-        let mut items = models::MediaInfo::get_all(&self.state.db.handle, coll.collection_id as i64, coll.subtype()).await?;
+        let mut items = models::MediaInfoOverview::get(&self.state.db.handle, coll.collection_id as i64, coll.subtype()).await?;
         let m = items.drain(..).map(|i| {
                 MediaItem {
                     id: i.id,

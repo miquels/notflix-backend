@@ -1,12 +1,12 @@
 use anyhow::Result;
 use futures_util::TryStreamExt;
 use crate::db;
-use crate::models::Thumb;
-use crate::util::Id;
+use crate::models::{FileInfo, Thumb};
+use crate::util::{Id, some_or_return};
 use crate::jvec::JVec;
 
 #[derive(Clone, Debug, sqlx::FromRow)]
-pub struct MediaInfo {
+pub struct MediaInfoOverview {
     /// TVShow or Movie id
     pub id: Id,
     /// Title.
@@ -15,15 +15,15 @@ pub struct MediaInfo {
     pub poster: Option<Thumb>,
 }
 
-impl MediaInfo {
-    pub async fn get_all(dbh: &db::DbHandle, collection_id: i64, type_: &str) -> Result<Vec<MediaInfo>> {
+impl MediaInfoOverview {
+    pub async fn get(dbh: &db::DbHandle, collection_id: i64, type_: &str) -> Result<Vec<MediaInfoOverview>> {
         let mut rows = sqlx::query!(
             r#"
                 SELECT i.id AS "id!: Id",
                        i.title,
                        i.thumbs AS "thumbs!: JVec<Thumb>"
                 FROM mediaitems i
-                WHERE i.collection_id = ? AND i.type = ?
+                WHERE i.collection_id = ? AND i.type = ? AND i.deleted = 0
                 ORDER BY LOWER( title)"#,
             collection_id,
             type_,
@@ -34,7 +34,7 @@ impl MediaInfo {
         while let Some(row) = rows.try_next().await? {
             let poster = row.thumbs.0.iter().find(|t| t.aspect == "poster").cloned();
             if let Some(title) = row.title {
-                items.push(MediaInfo {
+                items.push(MediaInfoOverview {
                     id: row.id,
                     title,
                     poster,
@@ -43,5 +43,42 @@ impl MediaInfo {
         }
 
         Ok(items)
+    }
+}
+
+#[derive(Clone, Debug, sqlx::FromRow)]
+pub struct MediaInfo {
+    /// TVShow or Movie id
+    pub id: Id,
+    /// Title.
+    pub title: String,
+    /// Thumbnail in poster aspect (if available)
+    pub thumbs: JVec<Thumb>,
+    /// Directory.
+    pub directory: FileInfo,
+}
+
+impl MediaInfo {
+    pub async fn get(dbh: &db::DbHandle, id: Id) -> Result<Option<MediaInfo>> {
+        let row = sqlx::query!(
+            r#"
+                SELECT  id AS "id!: Id",
+                        title,
+                        thumbs AS "thumbs!: JVec<Thumb>",
+                        directory AS "directory!: FileInfo"
+                FROM mediaitems
+                WHERE id = ?"#,
+            id 
+        )
+        .fetch_optional(dbh)
+        .await?;
+
+        let m = some_or_return!(row, Ok(None));
+        Ok(m.title.map(|title| MediaInfo {
+            id: m.id,
+            title,
+            thumbs: m.thumbs,
+            directory: m.directory,
+        }))
     }
 }

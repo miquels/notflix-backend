@@ -14,7 +14,7 @@ mod user;
 pub use episode::Episode;
 pub use fileinfo::FileInfo;
 // pub use self::image::{Image, GetImage, ImageState};
-pub use mediainfo::MediaInfo;
+pub use mediainfo::{MediaInfoOverview, MediaInfo};
 pub use misc::*;
 pub use movie::Movie;
 pub use nfo::{NfoBase, NfoMovie};

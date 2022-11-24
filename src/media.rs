@@ -1,39 +1,40 @@
 use std::io;
 
-use anyhow::Result;
-use axum::{body, response::Response, Router, routing::get};
-use axum::extract::{Extension, Path};
-use headers::{HeaderMapExt, UserAgent};
-use http::{Request, StatusCode};
+use poem::{
+    error::Error,
+    http::{Request as HttpRequest, StatusCode},
+    web::headers::{HeaderMapExt, UserAgent},
+    web::{Data, Path},
+    Request, Response, Result, Route,
+    handler, get,
+};
 
 use mp4lib::streaming::http_handler::{self, FsPath};
 
 use crate::server::SharedState;
 
+#[handler]
 async fn handle_request(
-    Path((coll, path)): Path<(u32, String)>,
-    Extension(state): Extension<SharedState>,
-    req: Request<body::Body>,
-) -> Result<Response, StatusCode> {
-
-    // Lose the request body.
-    let (parts, _) = req.into_parts();
-    let req = Request::from_parts(parts, ());
+    Path((coll_id, path)): Path<(u32, String)>,
+    Data(state): Data<&SharedState>,
+    req: &Request,
+) -> Result<Response> {
 
     // Find collection.
-    let coll = match state.config.collections.iter().find(|c| c.collection_id == coll) {
+    let coll = match state.config.get_collection(coll_id) {
         Some(coll) => coll,
-        None => return Err(StatusCode::NOT_FOUND),
+        None => return Err(Error::from_status(StatusCode::NOT_FOUND)),
     };
 
     // Handle request.
+    let req = poem_req_to_http_req(req);
     handle_request2(&path, &coll.directory, &req).await.map_err(|e| translate_io_error(e))
 }
 
 async fn handle_request2(
     path: &str,
     dir: &str,
-    req: &Request<()>
+    req: &HttpRequest<()>
 ) -> io::Result<Response> {
 
     let path = FsPath::Combine((dir, path));
@@ -52,19 +53,20 @@ async fn handle_request2(
     let filter_subs = is_cast && !is_notflix;
 
     if let Some(response) = http_handler::handle_hls(&req, path, filter_subs).await? {
-        return Ok(response);
+        return Ok(response.into());
     }
 
     if let Some(response) = http_handler::handle_pseudo(&req, path).await? {
-        return Ok(response);
+        return Ok(response.into());
     }
 
-    http_handler::handle_file(&req, path, None).await
+    let response = http_handler::handle_file(&req, path, None).await?;
+    Ok(response.into())
 }
 
-fn translate_io_error(err: io::Error) -> StatusCode {
-    use http::StatusCode as SC;
-    match err.kind() {
+fn translate_io_error(err: io::Error) -> Error {
+    use StatusCode as SC;
+    let status = match err.kind() {
         io::ErrorKind::NotFound => SC::NOT_FOUND,
         io::ErrorKind::PermissionDenied => SC::FORBIDDEN,
         io::ErrorKind::TimedOut => SC::REQUEST_TIMEOUT,
@@ -77,10 +79,23 @@ fn translate_io_error(err: io::Error) -> StatusCode {
                 SC::INTERNAL_SERVER_ERROR
             }
         },
-    }
+    };
+    Error::from_status(status)
 }
 
-pub fn routes() -> Router {
-    Router::new()
-        .route("/:coll/*path", get(handle_request))
+pub fn routes() -> Route {
+    Route::new().at("/:coll/*path", get(handle_request))
+}
+
+fn poem_req_to_http_req(req: &poem::Request) -> poem::http::Request<()> {
+    let mut http_req = poem::http::Request::builder()
+        .method(req.method())
+        .uri(req.uri())
+        .version(req.version());
+
+    for (name, val) in req.headers().iter() {
+        http_req = http_req.header(name.clone(), val.clone())
+    }
+
+    http_req.body(()).unwrap()
 }

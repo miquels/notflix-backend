@@ -4,7 +4,7 @@ extern crate anyhow;
 pub mod api;
 pub mod config;
 pub mod collections;
-// pub mod data;
+pub mod media;
 pub mod db;
 pub mod genres;
 pub(crate) mod id;

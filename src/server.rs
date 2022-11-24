@@ -15,7 +15,7 @@ use poem_openapi::{
 };
 
 use crate::api::Api;
-// use crate::data;
+use crate::media;
 use crate::db::Db;
 use crate::config::Config;
 use crate::models;
@@ -35,7 +35,17 @@ pub struct SharedState {
     in = "header",
     checker = "api_checker"
 )]
-pub struct SessionIdAuthorization(pub models::Session);
+pub struct SessionFK(pub models::Session);
+
+/// Cookie authorization
+#[derive(SecurityScheme)]
+#[oai(
+    type = "api_key",
+    key_name = "x-session-id",
+    in = "cookie",
+    checker = "api_checker"
+)]
+pub struct SessionFC(pub models::Session);
 
 async fn api_checker(req: &Request, api_key: ApiKey) -> Option<models::Session> {
     let state = req.data::<SharedState>().unwrap();
@@ -124,10 +134,12 @@ pub async fn serve(cfg: Config, db: Db) -> anyhow::Result<()> {
             .server("https://mx2.high5.nl:3001/api");
     let ui = api_service.rapidoc();
     // let spec = api_service.spec_endpoint_yaml();
+    let media = media::routes();
 
     let app = Route::new()
         .nest("/api", api_service)
         // .nest("/spec", spec)
+        .nest("/media", media)
         .nest("/", ui)
         .around(log)
         .data(state);
