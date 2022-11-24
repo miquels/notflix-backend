@@ -185,7 +185,7 @@ impl Api {
         }
     }
 
-    pub async fn login(&self, req: &Request, auth: Json<Authenticate>) -> Result<Response<LoginResponse>> {
+    pub async fn login(&self, auth: Json<Authenticate>, req: &Request) -> Result<Response<LoginResponse>> {
         let mut txn = self.state.db.handle.begin().await?;
 
         // Check Origin:

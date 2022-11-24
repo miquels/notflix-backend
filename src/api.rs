@@ -1,5 +1,5 @@
 use poem_openapi::{
-    param::Path,
+    param::{Path, Query},
     payload::{Binary, Json, Response},
     Object, OpenApi, Tags,
 };
@@ -15,6 +15,7 @@ mod tvshow;
 mod user;
 
 use collection::*;
+use self::image::*;
 use movie::*;
 use tvshow::*;
 use user::*;
@@ -49,8 +50,8 @@ impl Api {
 
     /// Authenticate to get a session key
     #[oai(path = "/auth/login", method = "post", tag = "ApiTags::Authorization")]
-    async fn api_login(&self, req: &Request, auth: Json<Authenticate>) -> Result<Response<LoginResponse>> {
-        let resp = self.login(req, auth).await?;
+    async fn api_login(&self, auth: Json<Authenticate>, req: &Request) -> Result<Response<LoginResponse>> {
+        let resp = self.login(auth, req).await?;
         Ok(resp)
     }
 
@@ -91,8 +92,9 @@ impl Api {
 
     /// Retrieve image.
     #[oai(path = "/image/:collection_id/:mediaitem_id/:image_id", method = "get", tag = "ApiTags::Media")]
-    async fn api_get_image(&self, _session: SessionFC, req: &Request, collection_id: Path<u32>, mediaitem_id: Path<String>, image_id: Path<i64>) -> Result<Response<Binary<Body>>> {
-        let res = self.get_image(req, collection_id.0, Id::from_str(&mediaitem_id.0)?, image_id.0).await?;
+    async fn api_get_image(&self, _session: SessionFC, collection_id: Path<u32>, mediaitem_id: Path<String>, image_id: Path<i64>, w: Query<Option<u32>>, h: Query<Option<u32>>, q: Query<Option<u32>>, req: &Request) -> Result<Response<Binary<Body>>> {
+        let whq = ImageOpts { width: w.0, height: h.0, quality: q.0 };
+        let res = self.get_image(collection_id.0, Id::from_str(&mediaitem_id.0)?, image_id.0, whq, req).await?;
         Ok(res)
     }
 
