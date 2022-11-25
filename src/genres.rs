@@ -1,6 +1,7 @@
-use std::collections::HashMap;
 use once_cell::sync::Lazy;
+use std::collections::HashMap;
 
+#[rustfmt::skip]
 static GENRES: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| HashMap::from([
     ( "absurdist",            "Absurdist" ),
     ( "action",               "Action" ),

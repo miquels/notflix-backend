@@ -3,27 +3,37 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use url::Url;
 
-use crate::models;
 use crate::collections::Collection;
+use crate::models;
 
-mod movie;
-mod tvshow;
 mod episode;
+mod movie;
 pub(crate) mod nfo;
 pub mod scandirs;
+mod tvshow;
 
 pub use movie::scan_movie_dir;
-pub use tvshow::scan_tvshow_dir;
 pub use nfo::Nfo;
+pub use tvshow::scan_tvshow_dir;
 
 #[async_trait]
 pub trait KodiFS {
-    async fn scan_directory(coll: &Collection, name: &str, db_item: Option<Box<Self>>, only_nfo: bool) -> Option<Box<Self>>;
+    async fn scan_directory(
+        coll: &Collection,
+        name: &str,
+        db_item: Option<Box<Self>>,
+        only_nfo: bool,
+    ) -> Option<Box<Self>>;
 }
 
 #[async_trait]
 impl KodiFS for models::TVShow {
-    async fn scan_directory(coll: &Collection, name: &str, db_item: Option<Box<Self>>, only_nfo: bool) -> Option<Box<Self>> {
+    async fn scan_directory(
+        coll: &Collection,
+        name: &str,
+        db_item: Option<Box<Self>>,
+        only_nfo: bool,
+    ) -> Option<Box<Self>> {
         let item = scan_tvshow_dir(coll, name, db_item, only_nfo).await?;
         Some(item)
     }
@@ -31,7 +41,12 @@ impl KodiFS for models::TVShow {
 
 #[async_trait]
 impl KodiFS for models::Movie {
-    async fn scan_directory(coll: &Collection, name: &str, db_item: Option<Box<Self>>, only_nfo: bool) -> Option<Box<Self>> {
+    async fn scan_directory(
+        coll: &Collection,
+        name: &str,
+        db_item: Option<Box<Self>>,
+        only_nfo: bool,
+    ) -> Option<Box<Self>> {
         let item = scan_movie_dir(coll, name, db_item, only_nfo).await?;
         Some(item)
     }

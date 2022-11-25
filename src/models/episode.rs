@@ -1,15 +1,15 @@
 use anyhow::Result;
-use serde::Serialize;
 use futures_util::TryStreamExt;
 use poem_openapi::Object;
+use serde::Serialize;
 
+use super::nfo::build_struct;
+use super::{is_default, FileInfo, NfoBase};
+use super::{Actor, Rating, UniqueId};
 use crate::db;
 use crate::jvec::JVec;
 use crate::models::thumb::Thumb;
 use crate::util::Id;
-use super::nfo::build_struct;
-use super::{Rating, UniqueId, Actor};
-use super::{FileInfo, NfoBase, is_default};
 
 #[derive(Object, Serialize, serde::Deserialize, Clone, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
@@ -60,12 +60,20 @@ pub struct Episode {
 }
 
 impl Episode {
-    pub async fn select_one(dbh: &mut db::TxnHandle<'_>, episode_id: Id) -> Result<Option<Episode>> {
+    pub async fn select_one(
+        dbh: &mut db::TxnHandle<'_>,
+        episode_id: Id,
+    ) -> Result<Option<Episode>> {
         let mut v = Episode::select(dbh, None, None, Some(episode_id)).await?;
         Ok(v.pop())
     }
 
-    pub async fn select(dbh: &mut db::TxnHandle<'_>, tvshow_id: Option<Id>, season: Option<i64>, episode_id: Option<Id>) -> Result<Vec<Episode>> {
+    pub async fn select(
+        dbh: &mut db::TxnHandle<'_>,
+        tvshow_id: Option<Id>,
+        season: Option<i64>,
+        episode_id: Option<Id>,
+    ) -> Result<Vec<Episode>> {
         let mut rows = sqlx::query!(
             r#"
                 SELECT i.id AS "id!: Id",
@@ -108,11 +116,34 @@ impl Episode {
 
         let mut episodes = Vec::new();
         while let Some(row) = rows.try_next().await? {
-            let ep = build_struct!(Episode, row,
-                id, collection_id, directory, deleted, lastmodified, dateadded, nfofile, thumbs,
-                nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.ratings,
-                nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
-                tvshow_id, video, season, episode, aired, runtime, displayseason, displayepisode);
+            let ep = build_struct!(
+                Episode,
+                row,
+                id,
+                collection_id,
+                directory,
+                deleted,
+                lastmodified,
+                dateadded,
+                nfofile,
+                thumbs,
+                nfo_base.title,
+                nfo_base.plot,
+                nfo_base.tagline,
+                nfo_base.ratings,
+                nfo_base.uniqueids,
+                nfo_base.actors,
+                nfo_base.credits,
+                nfo_base.directors,
+                tvshow_id,
+                video,
+                season,
+                episode,
+                aired,
+                runtime,
+                displayseason,
+                displayepisode
+            );
             episodes.push(ep);
         }
         Ok(episodes)
@@ -267,4 +298,3 @@ impl Episode {
         Ok(())
     }
 }
-

@@ -2,11 +2,11 @@ use std::io::BufReader;
 
 use anyhow::Result;
 use poem_openapi::Object;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use tokio::task;
 
 use crate::collections::Collection;
-use crate::models::{FileInfo, is_default};
+use crate::models::{is_default, FileInfo};
 use crate::sqlx::impl_sqlx_traits_for;
 use crate::util::Id;
 
@@ -24,7 +24,7 @@ pub struct Thumb {
     pub height: u32,
     pub quality: Option<u32>,
     #[serde(skip_serializing_if = "is_default")]
-    pub season:  Option<String>,
+    pub season: Option<String>,
     #[serde(skip)]
     #[oai(skip)]
     pub state: ThumbState,
@@ -40,7 +40,15 @@ pub enum ThumbState {
 }
 
 impl Thumb {
-    pub async fn new(basedir: &str, path: &str, coll: &Collection, mediaitem_id: Id, image_id: i64, aspect: &str, season: Option<String>) -> Result<Thumb> {
+    pub async fn new(
+        basedir: &str,
+        path: &str,
+        coll: &Collection,
+        mediaitem_id: Id,
+        image_id: i64,
+        aspect: &str,
+        season: Option<String>,
+    ) -> Result<Thumb> {
         let (fileinfo, width, height) = task::block_in_place(move || {
             let (file, fileinfo) = FileInfo::open_std(basedir, path)?;
             let ir = ::image::io::Reader::new(BufReader::with_capacity(32000, file));
@@ -76,7 +84,15 @@ impl Thumb {
         })
     }
 
-    pub async fn add(thumbs: &mut Vec<Thumb>, basedir: &str, path: &str, coll: &Collection, mediaitem_id: Id, aspect: &str, season: Option<String>) -> Result<()> {
+    pub async fn add(
+        thumbs: &mut Vec<Thumb>,
+        basedir: &str,
+        path: &str,
+        coll: &Collection,
+        mediaitem_id: Id,
+        aspect: &str,
+        season: Option<String>,
+    ) -> Result<()> {
         let fileinfo = FileInfo::from_path(basedir, path).await?;
         if let Some(thumb) = thumbs.iter_mut().find(|t| t.fileinfo == fileinfo) {
             thumb.state = ThumbState::Unchanged;

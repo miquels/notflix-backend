@@ -1,9 +1,9 @@
+use crate::db;
+use crate::jvec::JVec;
+use crate::models::{FileInfo, Thumb};
+use crate::util::{some_or_return, Id};
 use anyhow::Result;
 use futures_util::TryStreamExt;
-use crate::db;
-use crate::models::{FileInfo, Thumb};
-use crate::util::{Id, some_or_return};
-use crate::jvec::JVec;
 
 #[derive(Clone, Debug, sqlx::FromRow)]
 pub struct MediaInfoOverview {
@@ -16,7 +16,11 @@ pub struct MediaInfoOverview {
 }
 
 impl MediaInfoOverview {
-    pub async fn get(dbh: &db::DbHandle, collection_id: i64, type_: &str) -> Result<Vec<MediaInfoOverview>> {
+    pub async fn get(
+        dbh: &db::DbHandle,
+        collection_id: i64,
+        type_: &str,
+    ) -> Result<Vec<MediaInfoOverview>> {
         let mut rows = sqlx::query!(
             r#"
                 SELECT i.id AS "id!: Id",
@@ -34,11 +38,7 @@ impl MediaInfoOverview {
         while let Some(row) = rows.try_next().await? {
             let poster = row.thumbs.0.iter().find(|t| t.aspect == "poster").cloned();
             if let Some(title) = row.title {
-                items.push(MediaInfoOverview {
-                    id: row.id,
-                    title,
-                    poster,
-                });
+                items.push(MediaInfoOverview { id: row.id, title, poster });
             }
         }
 
@@ -68,7 +68,7 @@ impl MediaInfo {
                         directory AS "directory!: FileInfo"
                 FROM mediaitems
                 WHERE id = ?"#,
-            id 
+            id
         )
         .fetch_optional(dbh)
         .await?;

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sha_crypt::{Sha512Params, sha512_simple, sha512_check};
+use sha_crypt::{sha512_check, sha512_simple, Sha512Params};
 
 use crate::db;
 use crate::util::ok_or_return;
@@ -42,12 +42,9 @@ impl User {
     }
 
     pub async fn get_users(dbh: &mut db::TxnHandle<'_>) -> Result<Vec<User>> {
-        let r = sqlx::query_as!(
-            User,
-            r#"SELECT id, username, '' AS password, email FROM users"#,
-        )
-        .fetch_all(dbh)
-        .await?;
+        let r = sqlx::query_as!(User, r#"SELECT id, username, '' AS password, email FROM users"#,)
+            .fetch_all(dbh)
+            .await?;
 
         Ok(r)
     }
@@ -74,22 +71,14 @@ impl User {
     }
 
     pub async fn delete(txn: &mut db::TxnHandle<'_>, user_id: i64) -> Result<bool> {
-        let r = sqlx::query!(
-            r#"SELECT id FROM users WHERE id = ?"#,
-            user_id
-        )
-        .fetch_optional(&mut *txn)
-        .await?;
+        let r = sqlx::query!(r#"SELECT id FROM users WHERE id = ?"#, user_id)
+            .fetch_optional(&mut *txn)
+            .await?;
         if r.is_none() {
             return Ok(false);
         }
 
-        sqlx::query!(
-            r#"DELETE FROM users WHERE id = ?"#,
-            user_id
-        )
-        .execute(&mut *txn)
-        .await?;
+        sqlx::query!(r#"DELETE FROM users WHERE id = ?"#, user_id).execute(&mut *txn).await?;
 
         Ok(true)
     }

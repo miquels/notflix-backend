@@ -10,8 +10,8 @@ use anyhow::{Context, Result};
 use sqlx::sqlite::SqlitePool;
 
 use crate::collections::Collection;
+use crate::kodifs::{scandirs, KodiFS};
 use crate::models::{MediaItem, Movie, TVShow, UniqueId, UniqueIds};
-use crate::kodifs::{KodiFS, scandirs};
 use crate::util::Id;
 
 pub type DbHandle = SqlitePool;
@@ -24,7 +24,7 @@ pub struct Db {
 
 impl Db {
     pub async fn connect(db: &str) -> Result<Db> {
-        let db = Db{ handle: SqlitePool::connect(db).await? };
+        let db = Db { handle: SqlitePool::connect(db).await? };
         db.set_mediaitem_sequence().await?;
         Ok(db)
     }
@@ -52,7 +52,7 @@ impl Db {
                 sqlx::query!("INSERT INTO sqlite_sequence(name, seq) VALUES('mediaitems', 1000)")
                     .execute(&mut txn)
                     .await?;
-            }
+            },
         }
 
         txn.commit().await?;
@@ -61,7 +61,12 @@ impl Db {
     }
 
     // Update one movie.
-    pub async fn update_movie<M>(&self, coll: &Collection, name: &str, txn: &mut TxnHandle<'_>) -> Result<Option<Id>>
+    pub async fn update_movie<M>(
+        &self,
+        coll: &Collection,
+        name: &str,
+        txn: &mut TxnHandle<'_>,
+    ) -> Result<Option<Id>>
     where
         M: MediaItem,
         M: KodiFS,
@@ -81,7 +86,6 @@ impl Db {
 
             // Open the mediaitem's NFO file to read the unqiqueids.
             if let Some(mv) = M::scan_directory(coll, name, None, true).await {
-
                 // Try to find the mediaitem in the db by uniqueid.
                 let by = FindItemBy::uniqueids(mv.uniqueids(), true);
                 if let Some(mut oldmv) = M::lookup_by(&mut *txn, &by).await? {
@@ -104,7 +108,7 @@ impl Db {
             }
         }
         if let Some(db_item) = db_item.as_mut() {
-           db_item.undelete();
+            db_item.undelete();
         }
         let old_lastmodified = db_item.as_ref().map(|m| m.lastmodified()).unwrap_or(0);
         let is_new = db_item.is_none();
@@ -123,12 +127,14 @@ impl Db {
         // insert or update?
         if is_new {
             log::debug!("Db::update_mediaitem: adding new item to the db: {}", name);
-            item.insert(&mut *txn).await
+            item.insert(&mut *txn)
+                .await
                 .with_context(|| format!("failed to insert db for {}", name))?;
         } else if item.lastmodified() > old_lastmodified || need_update {
             // There was an update, so update the database.
             log::debug!("Db::update_mediaitem: updating item in the db: {}", name);
-            item.update(&mut *txn).await
+            item.update(&mut *txn)
+                .await
                 .with_context(|| format!("failed to update db for {}", name))?;
         } else {
             log::trace!("Db::update_mediaitem: no update needed for: {}", name);
@@ -139,7 +145,8 @@ impl Db {
             if nfo_lastmodified > old_lastmodified {
                 log::trace!("updating UniqueIds..");
                 let uids = UniqueIds::new(item.id());
-                uids.update(&mut *txn, item.uniqueids()).await
+                uids.update(&mut *txn, item.uniqueids())
+                    .await
                     .with_context(|| format!("failed to update uniqueids table for {}", name))?;
             }
         }
@@ -158,7 +165,11 @@ impl Db {
             let res = match coll.type_.as_str() {
                 "movies" => self.do_update_collection::<Movie>(coll, &mut txn).await,
                 "tvseries" | "tvshows" => self.do_update_collection::<TVShow>(coll, &mut txn).await,
-                _ => anyhow::bail!("Db::update_collection({}): unknown type {}", coll.directory, coll.type_),
+                _ => anyhow::bail!(
+                    "Db::update_collection({}): unknown type {}",
+                    coll.directory,
+                    coll.type_
+                ),
             };
             match res {
                 Ok(()) => Ok(txn.commit().await?),
@@ -167,7 +178,9 @@ impl Db {
                     return Err(e)?;
                 },
             }
-        }.await.map_err(|e: anyhow::Error| e);
+        }
+        .await
+        .map_err(|e: anyhow::Error| e);
 
         if let Err(e) = r {
             log::error!("Db::update_collection({}): {}", coll.directory, e);
@@ -177,13 +190,16 @@ impl Db {
         Ok(())
     }
 
-    async fn do_update_collection<M>(&self, coll: &Collection, txn: &mut TxnHandle<'_>) -> Result<()>
+    async fn do_update_collection<M>(
+        &self,
+        coll: &Collection,
+        txn: &mut TxnHandle<'_>,
+    ) -> Result<()>
     where
         M: KodiFS,
         M: MediaItem,
         M: Default,
     {
-
         // Get a list of directories from the filesystem.
         log::debug!("update_collection: scanning directory {}", coll.directory);
         let mut dirs = scandirs::scan_directories(coll, true).await;
@@ -212,21 +228,17 @@ impl Db {
                 FROM mediaitems
                 WHERE collection_id = ?
                   AND deleted != 1"#,
-                coll.collection_id
+            coll.collection_id
         )
         .fetch_all(&mut *txn)
         .await?;
 
         // Put the items from the database in a HashMap
-        let mut map = items
-            .drain(..)
-            .map(|m| (m.id, m))
-            .collect::<HashMap<_, _>>();
+        let mut map = items.drain(..).map(|m| (m.id, m)).collect::<HashMap<_, _>>();
 
         // For each item in the database.
         log::debug!("update_collection: starting loop over db items ({})", map.len());
         for (_id, dbitem) in map.iter_mut() {
-
             // Remove from the list of filesystem directories.
             dirs.remove(&dbitem.dir);
 
@@ -248,7 +260,7 @@ impl Db {
                         log::trace!("update_collection: removed: {}", dbitem.dir);
                     }
                     continue;
-                }
+                },
             }
 
             // Ok, we have to do a full rescan of this movie.
@@ -304,11 +316,11 @@ pub async fn lookup(txn: &mut TxnHandle<'_>, by: &FindItemBy<'_>) -> Result<Opti
             FROM mediaitems i
             WHERE (? IS NULL OR collection_id = ?)
               AND (id = ? OR json_extract(directory, '$.path') = ? OR title = ?)"#,
-            by.collection_id,
-            by.collection_id,
-            by.id,
-            by.directory,
-            by.title,
+        by.collection_id,
+        by.collection_id,
+        by.id,
+        by.directory,
+        by.title,
     )
     .fetch_optional(&mut *txn)
     .await?
@@ -333,17 +345,24 @@ pub struct FindItemBy<'a> {
 }
 
 impl<'a> FindItemBy<'a> {
-
     pub fn new() -> FindItemBy<'a> {
         FindItemBy::default()
     }
 
     pub fn id(id: Id, deleted_too: bool) -> FindItemBy<'a> {
-        FindItemBy { id: Some(id), deleted_too, ..FindItemBy::default() }
+        FindItemBy {
+            id: Some(id),
+            deleted_too,
+            ..FindItemBy::default()
+        }
     }
 
     pub fn uniqueids(uids: &'a [UniqueId], deleted_too: bool) -> FindItemBy<'a> {
-        FindItemBy { uniqueids: uids, deleted_too, ..FindItemBy::default() }
+        FindItemBy {
+            uniqueids: uids,
+            deleted_too,
+            ..FindItemBy::default()
+        }
     }
 
     pub fn directory(coll_id: u32, dir: &'a str, deleted_too: bool) -> FindItemBy<'a> {
@@ -351,14 +370,13 @@ impl<'a> FindItemBy<'a> {
             collection_id: Some(coll_id as i64),
             directory: Some(dir),
             deleted_too,
-            ..FindItemBy::default() }
+            ..FindItemBy::default()
+        }
     }
 
     pub(crate) fn is_only_id(&self) -> Option<Id> {
         if let Some(id) = self.id {
-            if self.title.is_none() &&
-               self.directory.is_none() &&
-               self.uniqueids.len() == 0 {
+            if self.title.is_none() && self.directory.is_none() && self.uniqueids.len() == 0 {
                 return Some(id);
             }
         }

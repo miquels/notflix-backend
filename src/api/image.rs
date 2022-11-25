@@ -1,14 +1,15 @@
-use std::io::{BufReader, BufWriter};
 use std::fs::File as StdFile;
+use std::io::{BufReader, BufWriter};
 
-use ::image::io::Reader as ImageReader;
 use ::image::codecs::jpeg::JpegEncoder;
 use ::image::imageops::FilterType;
+use ::image::io::Reader as ImageReader;
 
-use poem_openapi::{
-    payload::{Binary, Response},
+use poem::{
+    error::NotFoundError, web::StaticFileRequest, Body, FromRequest, IntoResponse, Request,
+    ResponseParts, Result,
 };
-use poem::{Body, FromRequest, IntoResponse, Request, ResponseParts, Result, error::NotFoundError, web::StaticFileRequest};
+use poem_openapi::payload::{Binary, Response};
 use tokio::task;
 
 use super::Api;
@@ -30,9 +31,18 @@ impl ImageOpts {
 
 impl Api {
     /// Retrieve image.
-    pub async fn get_image(&self, collection_id: u32, mediaitem_id: Id, image_id: i64, whq: ImageOpts, req: &Request) -> Result<Response<Binary<Body>>> {
+    pub async fn get_image(
+        &self,
+        collection_id: u32,
+        mediaitem_id: Id,
+        image_id: i64,
+        whq: ImageOpts,
+        req: &Request,
+    ) -> Result<Response<Binary<Body>>> {
         let coll = self.state.config.get_collection(collection_id).ok_or(NotFoundError)?;
-        let mi = models::MediaInfo::get(&self.state.db.handle, mediaitem_id).await?.ok_or(NotFoundError)?;
+        let mi = models::MediaInfo::get(&self.state.db.handle, mediaitem_id)
+            .await?
+            .ok_or(NotFoundError)?;
         let img = mi.thumbs.iter().find(|i| i.image_id == image_id).ok_or(NotFoundError)?;
         let mut file = format!("{}/{}/{}", coll.directory, mi.directory.path, img.fileinfo.path);
 
@@ -106,7 +116,7 @@ impl Api {
 }
 
 fn poem_response_to_binary(resp: poem::Response) -> Response<Binary<poem::Body>> {
-    let (ResponseParts{ status, version, headers, extensions }, body) = resp.into_parts();
+    let (ResponseParts { status, version, headers, extensions }, body) = resp.into_parts();
     let _ = (version, extensions);
     let mut headers = headers;
 

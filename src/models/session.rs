@@ -1,8 +1,8 @@
-use std::time::{Duration, SystemTime};
 use anyhow::Result;
+use std::time::{Duration, SystemTime};
 
 use crate::db;
-use crate::util::{Id, Rfc3339Time, some_or_return};
+use crate::util::{some_or_return, Id, Rfc3339Time};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Session {
@@ -12,9 +12,12 @@ pub struct Session {
 }
 
 impl Session {
-
     // Create new session.
-    pub async fn create(txn: &mut db::TxnHandle<'_>, user_id: i64, username: &str) -> Result<Session> {
+    pub async fn create(
+        txn: &mut db::TxnHandle<'_>,
+        user_id: i64,
+        username: &str,
+    ) -> Result<Session> {
         let sessionid = Id::new().to_string();
         let now = Rfc3339Time::new(SystemTime::now());
 
@@ -29,16 +32,24 @@ impl Session {
         )
         .execute(&mut *txn)
         .await?;
-        log::info!("create_session: created new session for user_id {} session {}", user_id, sessionid);
+        log::info!(
+            "create_session: created new session for user_id {} session {}",
+            user_id,
+            sessionid
+        );
         Ok(Session {
             username: username.to_string(),
             user_id,
-            sessionid
+            sessionid,
         })
     }
 
     // Find session in the database.
-    pub async fn find(txn: &mut db::TxnHandle<'_>, session_id: &str, timeout: Option<std::time::Duration>) -> Result<Option<Session>> {
+    pub async fn find(
+        txn: &mut db::TxnHandle<'_>,
+        session_id: &str,
+        timeout: Option<std::time::Duration>,
+    ) -> Result<Option<Session>> {
         let row = sqlx::query!(
             r#"
                 SELECT
@@ -68,7 +79,12 @@ impl Session {
                 )
                 .execute(&mut *txn)
                 .await?;
-                log::info!("find_session: session {} for {}: timeout ({})", s.sessionid, s.username, s.updated);
+                log::info!(
+                    "find_session: session {} for {}: timeout ({})",
+                    s.sessionid,
+                    s.username,
+                    s.updated
+                );
                 return Ok(None);
             }
         }

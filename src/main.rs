@@ -5,8 +5,8 @@ use notflix_backend::collections;
 use notflix_backend::config;
 use notflix_backend::db;
 use notflix_backend::kodifs;
-use notflix_backend::server;
 use notflix_backend::models::{Movie, TVShow};
+use notflix_backend::server;
 
 #[derive(StructOpt, Debug)]
 #[structopt(setting = clap::AppSettings::VersionlessSubcommands)]
@@ -68,7 +68,7 @@ pub struct ScanDirOpts {
     pub tvshows: bool,
 
     /// Directory name.
-    pub directory:  String,
+    pub directory: String,
 }
 
 #[derive(StructOpt, Debug)]
@@ -94,19 +94,19 @@ pub struct UpdateOpts {
     pub database: String,
 
     /// Directory name.
-    pub directory:  String,
+    pub directory: String,
 }
 
 #[derive(StructOpt, Debug)]
 pub struct DumpDbOpts {
     /// Database name.
-    pub database:  String,
+    pub database: String,
 }
 
 #[derive(StructOpt, Debug)]
 pub struct ReadNfoOpts {
     /// NFO name.
-    pub filename:  String,
+    pub filename: String,
 }
 
 #[tokio::main]

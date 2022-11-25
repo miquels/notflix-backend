@@ -1,6 +1,6 @@
 use anyhow::Result;
-use serde::{Serialize, Deserialize};
 use poem_openapi::Object;
+use serde::{Deserialize, Serialize};
 
 use crate::db;
 use crate::models::UniqueId;
@@ -17,14 +17,13 @@ impl_sqlx_traits_for!(UniqueIds);
 impl UniqueIds {
     pub fn new(mediaitem_id: Id) -> UniqueIds {
         // println!("UniqueIds::new({mediaitem_id})");
-        UniqueIds {
-            mediaitem_id,
-            ..UniqueIds::default()
-        }
+        UniqueIds { mediaitem_id, ..UniqueIds::default() }
     }
 
-    pub async fn get_mediaitem_id(dbh: &mut db::TxnHandle<'_>, uids: &[UniqueId]) -> Result<Option<Id>> {
-
+    pub async fn get_mediaitem_id(
+        dbh: &mut db::TxnHandle<'_>,
+        uids: &[UniqueId],
+    ) -> Result<Option<Id>> {
         if uids.len() == 0 {
             return Ok(None);
         }
@@ -34,9 +33,9 @@ impl UniqueIds {
         // First, build the query.
         let mut query_str = String::from(
             r#"SELECT mediaitem_id AS "mediaitem_id!: Id"
-               FROM uniqueids"#
+               FROM uniqueids"#,
         );
-        for idx in 0 .. uids.len() {
+        for idx in 0..uids.len() {
             if idx == 0 {
                 query_str.push_str(" WHERE ");
             } else {
@@ -53,9 +52,7 @@ impl UniqueIds {
         }
 
         // And execute it.
-        let rows = query
-            .fetch_all(dbh)
-            .await?;
+        let rows = query.fetch_all(dbh).await?;
 
         if rows.len() == 0 {
             return Ok(None);
@@ -66,7 +63,6 @@ impl UniqueIds {
     }
 
     pub async fn update(&self, txn: &mut db::TxnHandle<'_>, uids: &[UniqueId]) -> Result<()> {
-
         // XXX TODO could probably be smarter about this.
         for uid in uids {
             sqlx::query!(

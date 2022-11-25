@@ -3,7 +3,7 @@ use std::ops::Deref;
 
 use anyhow::Result;
 use rand::Rng;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::sqlx::impl_sqlx_traits_for;
 
@@ -21,22 +21,18 @@ impl Id {
         let mut id = AString::new();
 
         let len = std::cmp::min(len, 22);
-        let max = if len < 22 {
-            62u128.pow(len as u32)
-        } else {
-            u128::MAX
-        };
+        let max = if len < 22 { 62u128.pow(len as u32) } else { u128::MAX };
         let mut rng = rand::thread_rng();
-        let mut n = rng.gen_range(0 ..= max);
+        let mut n = rng.gen_range(0..=max);
 
         // into base62.
-        for _ in 0 .. len {
+        for _ in 0..len {
             let m = (n % 62) as u8;
             n /= 62;
             let c = match m {
-                0 ..= 9 => m + b'0',
-                10 ..= 35 => m - 10 + b'A',
-                36 ..= 61 => m - 36 + b'a',
+                0..=9 => m + b'0',
+                10..=35 => m - 10 + b'A',
+                36..=61 => m - 36 + b'a',
                 _ => unreachable!(),
             };
             let _ = id.try_push(c.into());
@@ -73,12 +69,12 @@ impl Deref for Id {
     }
 }
 
-use std::borrow::Cow;
-use serde_json::Value;
 use poem_openapi::{
     registry::{MetaSchema, MetaSchemaRef},
     types::{ToJSON, Type},
 };
+use serde_json::Value;
+use std::borrow::Cow;
 
 impl Type for Id {
     const IS_REQUIRED: bool = true;

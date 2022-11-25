@@ -28,7 +28,10 @@ macro_rules! impl_sqlx_traits_for {
         where
             $ty: serde::Serialize,
         {
-            fn encode_by_ref(&self, buf: &mut Vec<sqlx::sqlite::SqliteArgumentValue<'_>>) -> sqlx::encode::IsNull {
+            fn encode_by_ref(
+                &self,
+                buf: &mut Vec<sqlx::sqlite::SqliteArgumentValue<'_>>,
+            ) -> sqlx::encode::IsNull {
                 let json_string_value =
                     $codec::to_string(self).expect("serde failed to convert to string");
 
@@ -40,11 +43,12 @@ macro_rules! impl_sqlx_traits_for {
         where
             $ty: 'r + serde::Deserialize<'r>,
         {
-            fn decode(value: sqlx::sqlite::SqliteValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
+            fn decode(
+                value: sqlx::sqlite::SqliteValueRef<'r>,
+            ) -> Result<Self, sqlx::error::BoxDynError> {
                 let string_value = <&str as sqlx::Decode<sqlx::sqlite::Sqlite>>::decode(value)?;
 
-                $codec::from_str(&string_value)
-                    .map_err(Into::into)
+                $codec::from_str(&string_value).map_err(Into::into)
             }
         }
     };

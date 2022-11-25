@@ -14,18 +14,18 @@ mod user;
 pub use episode::Episode;
 pub use fileinfo::FileInfo;
 // pub use self::image::{Image, GetImage, ImageState};
-pub use mediainfo::{MediaInfoOverview, MediaInfo};
+pub use mediainfo::{MediaInfo, MediaInfoOverview};
 pub use misc::*;
 pub use movie::Movie;
 pub use nfo::{NfoBase, NfoMovie};
 pub use session::Session;
 pub use thumb::{Thumb, ThumbState};
-pub use tvshow::{TVShow, Season};
+pub use tvshow::{Season, TVShow};
 pub use uniqueids::UniqueIds;
-pub use user::{User, UpdateUser};
+pub use user::{UpdateUser, User};
 
-use async_trait::async_trait;
 use anyhow::Result;
+use async_trait::async_trait;
 
 use crate::db;
 use crate::util::{Id, SystemTimeToUnixTime};
@@ -39,7 +39,10 @@ pub trait MediaItem {
     fn lastmodified(&self) -> i64;
     fn nfo_lastmodified(&self) -> Option<i64>;
     fn undelete(&mut self);
-    async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &db::FindItemBy<'_>) -> Result<Option<Box<Self>>>;
+    async fn lookup_by(
+        dbh: &mut db::TxnHandle<'_>,
+        find: &db::FindItemBy<'_>,
+    ) -> Result<Option<Box<Self>>>;
     async fn insert(&self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()>;
     async fn update(&self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()>;
 }
@@ -77,7 +80,10 @@ impl MediaItem for Movie {
         }
     }
 
-    async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &db::FindItemBy<'_>) -> Result<Option<Box<Self>>> {
+    async fn lookup_by(
+        dbh: &mut db::TxnHandle<'_>,
+        find: &db::FindItemBy<'_>,
+    ) -> Result<Option<Box<Self>>> {
         Self::lookup_by(dbh, find).await
     }
 
@@ -123,7 +129,10 @@ impl MediaItem for TVShow {
         }
     }
 
-    async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &db::FindItemBy<'_>) -> Result<Option<Box<Self>>> {
+    async fn lookup_by(
+        dbh: &mut db::TxnHandle<'_>,
+        find: &db::FindItemBy<'_>,
+    ) -> Result<Option<Box<Self>>> {
         Self::lookup_by(dbh, find, true).await
     }
 

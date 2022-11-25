@@ -2,11 +2,11 @@ use std::io;
 
 use poem::{
     error::Error,
+    get, handler,
     http::{Request as HttpRequest, StatusCode},
     web::headers::{HeaderMapExt, UserAgent},
     web::{Data, Path},
     Request, Response, Result, Route,
-    handler, get,
 };
 
 use mp4lib::streaming::http_handler::{self, FsPath};
@@ -19,7 +19,6 @@ async fn handle_request(
     Data(state): Data<&SharedState>,
     req: &Request,
 ) -> Result<Response> {
-
     // Find collection.
     let coll = match state.config.get_collection(coll_id) {
         Some(coll) => coll,
@@ -31,12 +30,7 @@ async fn handle_request(
     handle_request2(&path, &coll.directory, &req).await.map_err(|e| translate_io_error(e))
 }
 
-async fn handle_request2(
-    path: &str,
-    dir: &str,
-    req: &HttpRequest<()>
-) -> io::Result<Response> {
-
+async fn handle_request2(path: &str, dir: &str, req: &HttpRequest<()>) -> io::Result<Response> {
     let path = FsPath::Combine((dir, path));
 
     // See if this is the Notflix custom receiver running on Chromecast.
@@ -88,10 +82,8 @@ pub fn routes() -> Route {
 }
 
 fn poem_req_to_http_req(req: &poem::Request) -> poem::http::Request<()> {
-    let mut http_req = poem::http::Request::builder()
-        .method(req.method())
-        .uri(req.uri())
-        .version(req.version());
+    let mut http_req =
+        poem::http::Request::builder().method(req.method()).uri(req.uri()).version(req.version());
 
     for (name, val) in req.headers().iter() {
         http_req = http_req.header(name.clone(), val.clone())

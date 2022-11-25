@@ -1,12 +1,12 @@
 use anyhow::Result;
+use poem::{
+    web::cookie::{Cookie, SameSite},
+    Request,
+};
 use poem_openapi::{
     payload::{Json, Response},
     types::{Email, Password},
     ApiResponse, Object,
-};
-use poem::{
-    web::cookie::{Cookie, SameSite},
-    Request,
 };
 
 use super::{Api, Authenticate};
@@ -118,7 +118,11 @@ pub enum LogoutResponse {
 }
 
 impl Api {
-    pub async fn create_user(&self, _session: Session, user: CreateUser) -> Result<CreateUserResponse> {
+    pub async fn create_user(
+        &self,
+        _session: Session,
+        user: CreateUser,
+    ) -> Result<CreateUserResponse> {
         let mut db_user = models::User {
             id: 0,
             username: user.username,
@@ -133,14 +137,13 @@ impl Api {
 
     pub async fn get_users(&self, _session: Session) -> Result<GetUsersResponse> {
         let mut txn = self.state.db.handle.begin().await?;
-        let users = models::User::get_users(&mut txn).await?
+        let users = models::User::get_users(&mut txn)
+            .await?
             .drain(..)
-            .map(|u| {
-                User {
-                    id: u.id,
-                    username: u.username,
-                    email: u.email.map(|e| Email(e)),
-                }
+            .map(|u| User {
+                id: u.id,
+                username: u.username,
+                email: u.email.map(|e| Email(e)),
             })
             .collect::<Vec<_>>();
         Ok(GetUsersResponse::Ok(Json(users)))
@@ -156,12 +159,17 @@ impl Api {
                     email: user.email.map(|e| Email(e)),
                 };
                 Ok(FindUserResponse::Ok(Json(user)))
-            }
+            },
             None => Ok(FindUserResponse::NotFound),
         }
     }
 
-    pub async fn update_user(&self, _session: Session, user_id: i64, user: UpdateUser) -> Result<UpdateUserResponse> {
+    pub async fn update_user(
+        &self,
+        _session: Session,
+        user_id: i64,
+        user: UpdateUser,
+    ) -> Result<UpdateUserResponse> {
         let db_user = models::UpdateUser {
             id: user_id,
             username: None,
@@ -185,7 +193,11 @@ impl Api {
         }
     }
 
-    pub async fn login(&self, auth: Json<Authenticate>, req: &Request) -> Result<Response<LoginResponse>> {
+    pub async fn login(
+        &self,
+        auth: Json<Authenticate>,
+        req: &Request,
+    ) -> Result<Response<LoginResponse>> {
         let mut txn = self.state.db.handle.begin().await?;
 
         // Check Origin:
@@ -198,14 +210,14 @@ impl Api {
                 // Strip port.
                 val = val.rsplit_once(":").map(|r| r.0).unwrap_or(val);
                 let mut names = self.state.config.server.hostname.iter();
-                (val == "localhost" || names.any(|h| h.eq_ignore_ascii_case(val))).then(||val)
+                (val == "localhost" || names.any(|h| h.eq_ignore_ascii_case(val))).then(|| val)
             },
             None => None,
         };
         if origin_host.is_none() {
             let origin = origin.unwrap_or("[none]");
             log::info!("invalid origin \"{}\", rejecting login request", origin);
-            return Ok(Response::new(LoginResponse::BadOrigin))
+            return Ok(Response::new(LoginResponse::BadOrigin));
         }
 
         // Find user.
@@ -228,7 +240,7 @@ impl Api {
         let jar = req.cookie();
         if let Some(cookie) = jar.get("x-session-id") {
             // In a cookie?
-            session =  Session::find(&mut txn, cookie.value_str(), d).await?;
+            session = Session::find(&mut txn, cookie.value_str(), d).await?;
         }
 
         if session.is_none() {
@@ -263,7 +275,11 @@ impl Api {
         Ok(resp)
     }
 
-    pub async fn logout(&self, session: Session, req: &Request) -> Result<Response<LogoutResponse>> {
+    pub async fn logout(
+        &self,
+        session: Session,
+        req: &Request,
+    ) -> Result<Response<LogoutResponse>> {
         let mut txn = self.state.db.handle.begin().await?;
         Session::delete(&mut txn, &session.sessionid).await?;
         txn.commit().await?;

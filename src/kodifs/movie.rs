@@ -1,13 +1,17 @@
-use std::time::SystemTime;
 use chrono::TimeZone;
+use std::time::SystemTime;
 
+use super::*;
 use crate::collections::*;
 use crate::models::{FileInfo, Movie, Thumb};
 use crate::util::{Id, SystemTimeToUnixTime};
-use super::*;
 
-pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<Box<Movie>>, only_nfo: bool) -> Option<Box<Movie>> {
-
+pub async fn scan_movie_dir(
+    coll: &Collection,
+    mut dirname: &str,
+    dbent: Option<Box<Movie>>,
+    only_nfo: bool,
+) -> Option<Box<Movie>> {
     // First get all directory entries.
     dirname = dirname.trim_end_matches('/');
     let dirinfo = FileInfo::from_path(&coll.directory, dirname).await.ok()?;
@@ -40,12 +44,14 @@ pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<
     let video = video?;
 
     // Initial Movie.
-    let mut movie = dbent.unwrap_or_else(|| Box::new(Movie {
-        id: Id::new(),
-        collection_id: coll.collection_id as i64,
-        video: video,
-        ..Movie::default()
-    }));
+    let mut movie = dbent.unwrap_or_else(|| {
+        Box::new(Movie {
+            id: Id::new(),
+            collection_id: coll.collection_id as i64,
+            video: video,
+            ..Movie::default()
+        })
+    });
     movie.lastmodified = newest;
     if movie.dateadded.is_none() {
         if let chrono::LocalResult::Single(c) = chrono::Local.timestamp_millis_opt(oldest) {
@@ -56,7 +62,11 @@ pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<
     // If the directory name changed, we need to update the db.
     if movie.directory.path != dirname {
         if movie.directory.path != "" {
-            log::debug!("Movie::scan_movie_dir: directory rename {} -> {}", movie.directory.path, dirname);
+            log::debug!(
+                "Movie::scan_movie_dir: directory rename {} -> {}",
+                movie.directory.path,
+                dirname
+            );
         }
         movie.lastmodified = SystemTime::now().unixtime_ms();
     }
@@ -75,7 +85,6 @@ pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<
 
     // Loop over all directory entries.
     for name in &entries {
-
         let mut i = name.split('/').last().unwrap().rsplitn(2, '.');
         let (base, ext) = match (i.next(), i.next()) {
             (Some(ext), Some(base)) => (base, ext),
@@ -129,21 +138,17 @@ pub async fn scan_movie_dir(coll: &Collection, mut dirname: &str, dbent: Option<
         // Image: banner, fanart, folder, poster etc
         if IS_IMAGE.is_match(name) {
             if ext == "tbn" && aux == "" {
-                    aux = "poster";
+                aux = "poster";
             }
             if aux == "" {
                 aux = base;
             }
             let aspect = match aux {
-                "banner" |
-                "fanart" |
-                "poster" |
-                "landscape" |
-                "clearart" |
-                "clearlogo" => aux,
+                "banner" | "fanart" | "poster" | "landscape" | "clearart" | "clearlogo" => aux,
                 _ => continue,
             };
-            let _ = Thumb::add(&mut movie.thumbs, &dirpath, name, coll, movie.id, aspect, None).await;
+            let _ =
+                Thumb::add(&mut movie.thumbs, &dirpath, name, coll, movie.id, aspect, None).await;
         }
 
         // XXX TODO: subtitles srt/vtt

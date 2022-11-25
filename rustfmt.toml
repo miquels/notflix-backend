@@ -1,0 +1,14 @@
+edition = "2021"
+match_block_trailing_comma = true
+max_width = 100
+use_small_heuristics = "Max"
+single_line_if_else_max_width = 70
+struct_lit_width = 40
+
+#unstable_features = true
+#binop_separator = "Back"
+#blank_lines_upper_bound = 3
+#enum_discrim_align_threshold = 20
+#force_multiline_blocks = true
+#struct_field_align_threshold = 20
+#wrap_comments = false

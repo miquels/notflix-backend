@@ -30,11 +30,7 @@ pub async fn scan_directories(coll: &Collection, subdirs: bool) -> HashMap<Strin
     hm
 }
 
-pub async fn scan_directory(
-    coll: &Collection,
-    name: &str,
-    subdirs: bool,
-) -> io::Result<i64> {
+pub async fn scan_directory(coll: &Collection, name: &str, subdirs: bool) -> io::Result<i64> {
     let dir = format!("{}/{}", coll.directory, name);
     let mut new = Some(0i64);
     do_read_dir(&dir, subdirs, None, &mut None, &mut None, &mut new).await?;
@@ -47,7 +43,7 @@ pub async fn read_dir(
     basedir: &str,
     subdirs: bool,
     names: &mut Vec<String>,
-    timestamps: bool
+    timestamps: bool,
 ) -> io::Result<(i64, i64)> {
     let mut old = timestamps.then(|| 0i64);
     let mut new = timestamps.then(|| 0i64);
@@ -61,11 +57,10 @@ async fn do_read_dir<'a: 'async_recursion>(
     basedir: &str,
     subdirs: bool,
     subdir: Option<&'a str>,
-    names:  &mut Option<&mut Vec<String>>,
+    names: &mut Option<&mut Vec<String>>,
     oldest: &mut Option<i64>,
     newest: &mut Option<i64>,
 ) -> io::Result<()> {
-
     // Only call metadata() on the entry if we need it.
     let do_meta = oldest.is_some() || newest.is_some();
 

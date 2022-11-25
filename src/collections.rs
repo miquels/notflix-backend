@@ -1,6 +1,6 @@
 use anyhow::Result;
-use serde::{Deserialize};
 use poem_openapi::Object;
+use serde::Deserialize;
 
 #[derive(Deserialize, Object, Debug, Default)]
 pub struct Collection {
@@ -11,8 +11,8 @@ pub struct Collection {
     #[oai(rename = "type")]
     pub type_: String,
 
-    #[serde(rename="collection-id")]
-    #[oai(rename="collection-id")]
+    #[serde(rename = "collection-id")]
+    #[oai(rename = "collection-id")]
     pub collection_id: u32,
 
     #[oai(skip)]

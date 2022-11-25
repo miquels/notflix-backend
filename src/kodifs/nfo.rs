@@ -23,11 +23,11 @@ use crate::models::{self, NfoBase, NfoMovie};
 #[serde(default)]
 pub struct Thumb {
     #[serde(skip_serializing_if = "Option::is_none", rename(deserialize = "$value"))]
-    pub image:   Option<String>,
+    pub image: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub aspect:  Option<String>,
+    pub aspect: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub preview:  Option<String>,
+    pub preview: Option<String>,
 }
 
 /// Fanart (16:9 1080x1920 image, usually).
@@ -44,12 +44,12 @@ pub struct Fanart {
 #[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(default)]
 pub struct UniqueId {
-    #[serde(skip_serializing_if = "Option::is_none", rename="type")]
-    pub idtype:  Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "type")]
+    pub idtype: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_bool")]
     pub default: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none", rename(deserialize = "$value"))]
-    pub id:   Option<String>,
+    pub id: Option<String>,
 }
 
 /// Actor information.
@@ -57,13 +57,13 @@ pub struct UniqueId {
 #[serde(default)]
 pub struct Actor {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub name:   Option<String>,
+    pub name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
-    pub role:   Option<String>,
+    pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_u32")]
     pub order: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub thumb:  Option<Thumb>,
+    pub thumb: Option<Thumb>,
 }
 
 /// video/audio info.
@@ -71,7 +71,7 @@ pub struct Actor {
 #[serde(default)]
 pub struct VidFileInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub streamdetails:  Option<StreamDetails>,
+    pub streamdetails: Option<StreamDetails>,
 }
 
 /// video/audio info
@@ -79,7 +79,7 @@ pub struct VidFileInfo {
 #[serde(default)]
 pub struct StreamDetails {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub video:  Option<VideoDetails>,
+    pub video: Option<VideoDetails>,
 }
 
 /// video/audio info
@@ -87,17 +87,17 @@ pub struct StreamDetails {
 #[serde(default)]
 pub struct VideoDetails {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub codec:  Option<String>,
+    pub codec: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_f32")]
     pub aspect: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_u32")]
-    pub width:  Option<u32>,
+    pub width: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_u32")]
-    pub height:  Option<u32>,
+    pub height: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_f32")]
-    pub duration:  Option<f32>,
+    pub duration: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_u32")]
-    pub durationinseconds:  Option<u32>,
+    pub durationinseconds: Option<u32>,
 }
 
 /// Ratings.
@@ -118,15 +118,15 @@ impl Ratings {
 #[serde(default)]
 pub struct Rating {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub name:   Option<String>,
+    pub name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_bool")]
     pub default: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_u32")]
-    pub max:    Option<u32>,
+    pub max: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_f32")]
-    pub value:    Option<f32>,
+    pub value: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_u32")]
-    pub votes:    Option<u32>,
+    pub votes: Option<u32>,
 }
 
 /// NFO file type.
@@ -159,10 +159,10 @@ impl NfoType {
 #[serde(default)]
 pub struct Nfo {
     #[serde(skip)]
-    pub nfo_type:  NfoType,
+    pub nfo_type: NfoType,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub title:  Option<String>,
+    pub title: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_string")]
     pub originaltitle: Option<String>,
@@ -286,7 +286,8 @@ impl Nfo {
 
         // Fix up genre.
         if nfo.genre.iter().any(|g| g.contains(",") || g.contains("/")) {
-            let g = nfo.genre
+            let g = nfo
+                .genre
                 .iter()
                 .map(|g| g.split(|c| c == ',' || c == '/'))
                 .flatten()
@@ -309,7 +310,8 @@ impl Nfo {
 
     /// Fill `NfoBase` with data from the nfo file.
     pub fn to_nfo_base(&self) -> NfoBase {
-        let mut ratings = self.ratings
+        let mut ratings = self
+            .ratings
             .rating
             .iter()
             .map(|r| models::Rating {
@@ -320,7 +322,8 @@ impl Nfo {
                 votes: r.votes,
             })
             .collect::<Vec<_>>();
-        let mut uniqueids = self.uniqueid
+        let mut uniqueids = self
+            .uniqueid
             .iter()
             .filter(|i| i.id.is_some() && i.idtype.is_some())
             .map(|i| models::UniqueId {
@@ -329,7 +332,8 @@ impl Nfo {
                 id: i.id.clone().unwrap(),
             })
             .collect::<Vec<_>>();
-        let actors = self.actor
+        let actors = self
+            .actor
             .iter()
             .map(|a| models::Actor {
                 name: a.name.clone(),
@@ -428,7 +432,7 @@ impl Nfo {
                 } else {
                     None
                 }
-            }
+            },
         };
         NfoMovie {
             originaltitle: self.originaltitle.clone(),

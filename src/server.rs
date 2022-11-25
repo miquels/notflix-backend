@@ -1,23 +1,18 @@
-use std::sync::Arc;
 use std::io;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context;
 use poem::{
     listener::{Listener, RustlsCertificate, RustlsConfig, TcpListener},
-    Endpoint, EndpointExt, Result, Request, Response, IntoResponse,
-    Route, Server,
+    Endpoint, EndpointExt, IntoResponse, Request, Response, Result, Route, Server,
 };
-use poem_openapi::{
-    OpenApiService,
-    auth::ApiKey,
-    SecurityScheme,
-};
+use poem_openapi::{auth::ApiKey, OpenApiService, SecurityScheme};
 
 use crate::api::Api;
-use crate::media;
-use crate::db::Db;
 use crate::config::Config;
+use crate::db::Db;
+use crate::media;
 use crate::models;
 use crate::util::ok_or_return;
 
@@ -29,22 +24,12 @@ pub struct SharedState {
 
 /// ApiKey authorization
 #[derive(SecurityScheme)]
-#[oai(
-    type = "api_key",
-    key_name = "X-Session-Id",
-    in = "header",
-    checker = "api_checker"
-)]
+#[oai(type = "api_key", key_name = "X-Session-Id", in = "header", checker = "api_checker")]
 pub struct SessionFK(pub models::Session);
 
 /// Cookie authorization
 #[derive(SecurityScheme)]
-#[oai(
-    type = "api_key",
-    key_name = "x-session-id",
-    in = "cookie",
-    checker = "api_checker"
-)]
+#[oai(type = "api_key", key_name = "x-session-id", in = "cookie", checker = "api_checker")]
 pub struct SessionFC(pub models::Session);
 
 async fn api_checker(req: &Request, api_key: ApiKey) -> Option<models::Session> {
@@ -79,19 +64,18 @@ async fn api_checker(req: &Request, api_key: ApiKey) -> Option<models::Session> 
 }
 
 pub async fn serve(cfg: Config, db: Db) -> anyhow::Result<()> {
-
     let mut listeners = Vec::new();
 
     if cfg.server.tls_listen.len() > 0 {
-
         // Try to read the certificates, just to make sure.
         let tls_cert = cfg.server.tls_cert.clone().unwrap();
         let tls_key = cfg.server.tls_key.clone().unwrap();
         let mut tls_file_state = TlsFileState::new();
-        load_tls_config(&mut tls_file_state, &tls_cert, &tls_key, true).await
+        load_tls_config(&mut tls_file_state, &tls_cert, &tls_key, true)
+            .await
             .with_context(|| "failed to load certificate")?;
 
-        let (tx, rx) =  flume::bounded(cfg.server.tls_listen.len() + 1);
+        let (tx, rx) = flume::bounded(cfg.server.tls_listen.len() + 1);
 
         for addr in cfg.server.tls_addrs.clone().drain(..) {
             listeners.push(TcpListener::bind(addr).rustls(rx.clone().into_stream()).boxed());
@@ -127,11 +111,10 @@ pub async fn serve(cfg: Config, db: Db) -> anyhow::Result<()> {
         listener = listener.combine(l).boxed();
     }
 
-    let state = SharedState{ db, config: Arc::new(cfg) };
+    let state = SharedState { db, config: Arc::new(cfg) };
 
-    let api_service =
-        OpenApiService::new(Api::new(state.clone()), "Notflix", "0.1")
-            .server("https://mx2.high5.nl:3001/api");
+    let api_service = OpenApiService::new(Api::new(state.clone()), "Notflix", "0.1")
+        .server("https://mx2.high5.nl:3001/api");
     let ui = api_service.rapidoc();
     // let spec = api_service.spec_endpoint_yaml();
     let media = media::routes();
@@ -175,7 +158,12 @@ async fn stat(file: &str, size: &mut u64, time: &mut SystemTime) -> io::Result<(
     Ok(())
 }
 
-async fn load_tls_config(tls_file_state: &mut TlsFileState, tls_cert: &str, tls_key: &str, first: bool) -> io::Result<Option<RustlsConfig>> {
+async fn load_tls_config(
+    tls_file_state: &mut TlsFileState,
+    tls_cert: &str,
+    tls_key: &str,
+    first: bool,
+) -> io::Result<Option<RustlsConfig>> {
     let mut newstate = TlsFileState::new();
     stat(tls_cert, &mut newstate.cert_size, &mut newstate.cert_time).await?;
     stat(tls_key, &mut newstate.key_size, &mut newstate.key_time).await?;
@@ -188,14 +176,13 @@ async fn load_tls_config(tls_file_state: &mut TlsFileState, tls_cert: &str, tls_
     let tls_config = RustlsConfig::new().fallback(
         RustlsCertificate::new()
             .cert(tokio::fs::read(tls_cert).await?)
-            .key(tokio::fs::read(tls_key).await?)
+            .key(tokio::fs::read(tls_key).await?),
     );
     *tls_file_state = newstate;
     Ok(Some(tls_config))
 }
 
 async fn log<E: Endpoint>(next: E, req: Request) -> Result<Response> {
-
     // store request data.
     let start = std::time::Instant::now();
     let now = chrono::Local::now();

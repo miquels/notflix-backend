@@ -1,12 +1,8 @@
-use anyhow::Result;
-use poem_openapi::{
-    payload::Json,
-    ApiResponse,
-    Object,
-};
 use super::Api;
 use crate::models;
 use crate::util::Id;
+use anyhow::Result;
+use poem_openapi::{payload::Json, ApiResponse, Object};
 
 pub use crate::collections::Collection;
 
@@ -26,9 +22,9 @@ pub enum GetCollectionsResponse<'a> {
 pub struct MediaItem {
     /// Unique ID
     #[oai(read_only)]
-    pub id:     Id,
+    pub id: Id,
     /// Title
-    pub title:  String,
+    pub title: String,
     /// Thumbnail
     pub poster: Option<models::Thumb>,
 }
@@ -59,13 +55,18 @@ impl Api {
             Some(coll) => coll,
             None => return Ok(GetThumbsResponse::NotFound),
         };
-        let mut items = models::MediaInfoOverview::get(&self.state.db.handle, coll.collection_id as i64, coll.subtype()).await?;
-        let m = items.drain(..).map(|i| {
-                MediaItem {
-                    id: i.id,
-                    title: i.title,
-                    poster: i.poster,
-                }
+        let mut items = models::MediaInfoOverview::get(
+            &self.state.db.handle,
+            coll.collection_id as i64,
+            coll.subtype(),
+        )
+        .await?;
+        let m = items
+            .drain(..)
+            .map(|i| MediaItem {
+                id: i.id,
+                title: i.title,
+                poster: i.poster,
             })
             .collect::<Vec<_>>();
         Ok(GetThumbsResponse::Ok(Json(m)))

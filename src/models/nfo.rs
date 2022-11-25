@@ -1,10 +1,10 @@
-use serde::{Serialize, Deserialize};
 use poem_openapi::Object;
+use serde::{Deserialize, Serialize};
 
-use crate::sqlx::impl_sqlx_traits_for;
-use crate::jvec::JVec;
 use super::is_default;
-use super::{Rating, UniqueId, Actor};
+use super::{Actor, Rating, UniqueId};
+use crate::jvec::JVec;
+use crate::sqlx::impl_sqlx_traits_for;
 
 pub use crate::kodifs::nfo::NfoType;
 
@@ -99,4 +99,3 @@ macro_rules! build_struct {
     };
 }
 pub(crate) use build_struct;
-

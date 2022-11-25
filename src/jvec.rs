@@ -1,5 +1,5 @@
+use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
-use serde::{Serialize, Deserialize};
 
 ///
 /// JVec<T> is a transparent wrapper for Vec<T>.
@@ -73,7 +73,10 @@ impl<T> sqlx::Encode<'_, sqlx::sqlite::Sqlite> for JVec<T>
 where
     T: serde::Serialize,
 {
-    fn encode_by_ref(&self, buf: &mut Vec<sqlx::sqlite::SqliteArgumentValue<'_>>) -> sqlx::encode::IsNull {
+    fn encode_by_ref(
+        &self,
+        buf: &mut Vec<sqlx::sqlite::SqliteArgumentValue<'_>>,
+    ) -> sqlx::encode::IsNull {
         let json_string_value =
             serde_json::to_string(&self.0).expect("serde_json failed to convert to string");
 
@@ -88,23 +91,19 @@ where
     fn decode(value: sqlx::sqlite::SqliteValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
         let string_value = <&str as sqlx::Decode<sqlx::sqlite::Sqlite>>::decode(value)?;
 
-        serde_json::from_str(&string_value)
-            .map(JVec)
-            .map_err(Into::into)
+        serde_json::from_str(&string_value).map(JVec).map_err(Into::into)
     }
 }
 
 //
-// Implementation of `poem_openapi` traits. Normally you'd just slap 
+// Implementation of `poem_openapi` traits. Normally you'd just slap
 // #derive(Object>` on the JVec<T> type, but the derive macro doesn't
 // understand generics so we have to implement the traits manually.
 //
 // Mostly copied from
 // https://github.com/poem-web/poem/blob/master/poem-openapi/src/types/external/vec.rs
 //
-use std::borrow::Cow;
 use poem::web::Field as PoemField;
-use serde_json::Value;
 use poem_openapi::{
     registry::{MetaSchema, MetaSchemaRef, Registry},
     types::{
@@ -112,6 +111,8 @@ use poem_openapi::{
         ToJSON, Type,
     },
 };
+use serde_json::Value;
+use std::borrow::Cow;
 
 impl<T: Type> Type for JVec<T> {
     const IS_REQUIRED: bool = true;
@@ -160,7 +161,7 @@ impl<T: ParseFromJSON> ParseFromJSON for JVec<T> {
                     res.push(T::parse_from_json(Some(value)).map_err(ParseError::propagate)?);
                 }
                 Ok(res)
-            }
+            },
             _ => Err(ParseError::expected_type(value)),
         }
     }
@@ -190,19 +191,16 @@ impl<T: ParseFromMultipartField> ParseFromMultipartField for JVec<T> {
     async fn parse_from_multipart(field: Option<PoemField>) -> ParseResult<Self> {
         match field {
             Some(field) => {
-                let item = T::parse_from_multipart(Some(field))
-                    .await
-                    .map_err(ParseError::propagate)?;
+                let item =
+                    T::parse_from_multipart(Some(field)).await.map_err(ParseError::propagate)?;
                 Ok(JVec(vec![item]))
-            }
+            },
             None => Ok(JVec::new()),
         }
     }
 
     async fn parse_from_repeated_field(mut self, field: PoemField) -> ParseResult<Self> {
-        let item = T::parse_from_multipart(Some(field))
-            .await
-            .map_err(ParseError::propagate)?;
+        let item = T::parse_from_multipart(Some(field)).await.map_err(ParseError::propagate)?;
         self.push(item);
         Ok(self)
     }

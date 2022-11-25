@@ -1,13 +1,13 @@
 use anyhow::Result;
-use serde::Serialize;
 use poem_openapi::Object;
+use serde::Serialize;
 
+use super::nfo::build_struct;
+use super::{is_default, FileInfo, NfoBase, NfoMovie};
+use super::{Actor, Rating, Thumb, UniqueId};
 use crate::db::{self, FindItemBy};
 use crate::jvec::JVec;
 use crate::util::Id;
-use super::nfo::build_struct;
-use super::{Rating, Thumb, UniqueId, Actor};
-use super::{NfoBase, NfoMovie, FileInfo, is_default};
 
 #[derive(Object, Serialize, Clone, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
@@ -49,7 +49,10 @@ pub struct Movie {
 }
 
 impl Movie {
-    pub async fn lookup_by(dbh: &mut db::TxnHandle<'_>, find: &FindItemBy<'_>) -> Result<Option<Box<Movie>>> {
+    pub async fn lookup_by(
+        dbh: &mut db::TxnHandle<'_>,
+        find: &FindItemBy<'_>,
+    ) -> Result<Option<Box<Movie>>> {
         // Find the ID.
         let id = match find.is_only_id() {
             Some(id) => id,
@@ -102,13 +105,35 @@ impl Movie {
             },
         };
 
-        let m = build_struct!(Movie, r,
-            id, collection_id, directory, deleted, lastmodified, dateadded, nfofile, thumbs,
-            nfo_base.title, nfo_base.plot, nfo_base.tagline, nfo_base.ratings,
-            nfo_base.uniqueids, nfo_base.actors, nfo_base.credits, nfo_base.directors,
-            nfo_movie.originaltitle, nfo_movie.sorttitle, nfo_movie.countries,
-            nfo_movie.genres, nfo_movie.studios, nfo_movie.premiered, nfo_movie.mpaa,
-            runtime, video);
+        let m = build_struct!(
+            Movie,
+            r,
+            id,
+            collection_id,
+            directory,
+            deleted,
+            lastmodified,
+            dateadded,
+            nfofile,
+            thumbs,
+            nfo_base.title,
+            nfo_base.plot,
+            nfo_base.tagline,
+            nfo_base.ratings,
+            nfo_base.uniqueids,
+            nfo_base.actors,
+            nfo_base.credits,
+            nfo_base.directors,
+            nfo_movie.originaltitle,
+            nfo_movie.sorttitle,
+            nfo_movie.countries,
+            nfo_movie.genres,
+            nfo_movie.studios,
+            nfo_movie.premiered,
+            nfo_movie.mpaa,
+            runtime,
+            video
+        );
         Ok(Some(Box::new(m)))
     }
 

@@ -1,23 +1,28 @@
 use chrono::TimeZone;
 
+use super::*;
 use crate::collections::Collection;
 use crate::models::{self, FileInfo, Thumb};
 use crate::util::{Id, SystemTimeToUnixTime};
-use super::*;
 
 #[derive(Debug)]
 pub struct Episode<'c> {
     pub showdir: String,
     pub basepath: String,
-    pub files:   Vec<String>,
+    pub files: Vec<String>,
     pub episode: models::Episode,
     pub coll: &'c Collection,
 }
 
 impl<'c> Episode<'c> {
-
-    pub async fn new<'a>(coll: &'a Collection, showdir: String, name: &str, basepath: &str, season_hint: Option<u32>, db_episode: Option<&mut models::Episode>) -> Option<Episode<'a>> {
-
+    pub async fn new<'a>(
+        coll: &'a Collection,
+        showdir: String,
+        name: &str,
+        basepath: &str,
+        season_hint: Option<u32>,
+        db_episode: Option<&mut models::Episode>,
+    ) -> Option<Episode<'a>> {
         // Parse the episode filename for season and episode number etc.
         let ep_info = match EpisodeNameInfo::parse(basepath, season_hint) {
             Some(ep_info) => ep_info,
@@ -75,7 +80,6 @@ impl<'c> Episode<'c> {
     // See if this is a file that is related to an episode, by
     // indexing on the basepath.
     async fn add_related_file(&mut self, name: String) {
-
         let caps = IS_RELATED.captures(&name);
         let (aux, ext) = match caps.as_ref() {
             Some(c) => (c.get(2), &c[3]),
@@ -86,7 +90,17 @@ impl<'c> Episode<'c> {
         // Thumb: <base>.tbn or <base>-thumb.ext
         if IS_IMAGE.is_match(&name) {
             if ext == "tbn" || aux == "thumb" {
-                if let Err(e) = Thumb::add(&mut self.episode.thumbs, &self.showdir, &name, self.coll, self.episode.id, "thumb", None).await {
+                if let Err(e) = Thumb::add(
+                    &mut self.episode.thumbs,
+                    &self.showdir,
+                    &name,
+                    self.coll,
+                    self.episode.id,
+                    "thumb",
+                    None,
+                )
+                .await
+                {
                     log::debug!("Episode::add_related_file: {}/{}: {}", self.showdir, name, e);
                 }
             }
@@ -120,7 +134,6 @@ impl<'c> Episode<'c> {
         if ext == "nfo" {
             match FileInfo::open(&self.showdir, &name).await {
                 Ok((mut file, nfofile)) => {
-
                     let mut nfofile = Some(nfofile);
                     if self.episode.nfofile == nfofile {
                         // No change.
@@ -157,7 +170,6 @@ macro_rules! regex {
 }
 
 impl EpisodeNameInfo {
-
     pub fn parse(name: &str, season_hint: Option<u32>) -> Option<EpisodeNameInfo> {
         let mut ep = EpisodeNameInfo::default();
         let name = name.split('/').last().unwrap();

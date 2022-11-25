@@ -58,14 +58,18 @@ pub fn from_file(path: &str) -> anyhow::Result<Config> {
     if cfg.server.listen.len() == 0 && cfg.server.tls_listen.len() == 0 {
         bail!("{}: no listen addresses configured", path);
     }
-    if cfg.server.tls_listen.len() > 0 && (cfg.server.tls_cert.is_none() || cfg.server.tls_key.is_none()) {
+    if cfg.server.tls_listen.len() > 0
+        && (cfg.server.tls_cert.is_none() || cfg.server.tls_key.is_none())
+    {
         bail!("{}: must set tls_cert and tls_key", path);
     }
     for coll in &cfg.collections {
         coll.check().with_context(|| format!("file: {}", path))?;
     }
-    cfg.server.addrs = parse_listeners(&cfg.server.listen).with_context(|| format!("file: {}", path))?;
-    cfg.server.tls_addrs = parse_listeners(&cfg.server.tls_listen).with_context(|| format!("file: {}", path))?;
+    cfg.server.addrs =
+        parse_listeners(&cfg.server.listen).with_context(|| format!("file: {}", path))?;
+    cfg.server.tls_addrs =
+        parse_listeners(&cfg.server.tls_listen).with_context(|| format!("file: {}", path))?;
     Ok(cfg)
 }
 
