@@ -130,9 +130,8 @@ impl Api {
         req: &Request,
     ) -> Result<Response<Binary<Body>>> {
         let whq = ImageOpts { width: w.0, height: h.0, quality: q.0 };
-        let res = self
-            .get_image(collection_id.0, Id::from_str(&mediaitem_id.0)?, image_id.0, whq, req)
-            .await?;
+        let mid = Id::from_str(&mediaitem_id.0)?;
+        let res = self.get_image(collection_id.0, mid, image_id.0, whq, req).await?;
         Ok(res)
     }
 

@@ -16,7 +16,7 @@ pub struct Id(AString);
 impl Id {
     /// Generate a base62 encoded unique (random) id of `len` characters.
     /// Maximum length is 22, which can encode 128 bits of data.
-    /// Length 20 contains about 125 bits of random data.
+    /// Length 20 contains about 119 bits of random data.
     pub fn new_with_len(len: usize) -> Id {
         let mut id = AString::new();
 

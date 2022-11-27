@@ -112,7 +112,7 @@ impl TVShow {
         )
         .fetch_optional(&mut *dbh)
         .await?;
-        let row = some_or_return!(row, { Ok(None) });
+        let row = some_or_return!(row, Ok(None));
 
         let mut seasons = Vec::new();
         if include_episodes {

@@ -11,6 +11,12 @@ path = "src/lib.rs"
 name = "notflix_backend"
 path = "src/main.rs"
 
+[features]
+default = []
+with-fast_image_resize = [ "fast_image_resize" ]
+with-zune-jpeg = [ "zune-jpeg" ]
+with-magick_rust = [ "magick_rust" ]
+
 [dependencies]
 anyhow = { version = "1.0", features = ["backtrace"] }
 arc-swap = "1.5.0"
@@ -21,6 +27,7 @@ async-trait = "0.1.58"
 chrono = { version = "0.4.23", features = ["std", "clock"] }
 clap = "2.33"
 curlyconf = "0.1.0"
+fast_image_resize = { version = "2.2.0", optional = true }
 flume = "0.10.14"
 futures-core = "0.3.21"
 futures-util = "0.3.21"
@@ -30,6 +37,7 @@ http-body = "0.4.4"
 humantime-serde = "1.1.1"
 image = "0.24.5"
 log = "0.4.17"
+magick_rust = { version = "0.16.0", features = ["disable-hdri"], optional = true }
 once_cell = "1.9.0"
 poem = { version = "1.3.49", features = ["server", "rustls", "anyhow", "static-files"] }
 poem-openapi = { version = "2.0.20", features = ["swagger-ui", "rapidoc", "email"] }
@@ -48,6 +56,7 @@ tracing = "0.1"
 tracing-subscriber = { version="0.3", features = ["env-filter"] }
 typenum = "1.15.0"
 url = "2.2.2"
+zune-jpeg = { version = "0.2.0", optional = true }
 
 mp4lib = { version = "0.1", features = ["hyper-body"], path = "../mp4/mp4lib" }
 
