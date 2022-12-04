@@ -1,7 +1,7 @@
 use poem_openapi::Object;
 use serde::{Deserialize, Serialize};
 
-use super::{is_default, Thumb};
+use super::{is_default, FileInfo, Thumb};
 use crate::sqlx::impl_sqlx_traits_for;
 
 #[derive(Object, Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
@@ -45,3 +45,16 @@ pub struct UniqueId {
     pub id: String,
 }
 impl_sqlx_traits_for!(UniqueId);
+
+#[derive(Object, Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
+#[serde(default)]
+pub struct Subtitle {
+    pub id: u32,
+    pub language: Option<String>,
+    pub sdh: bool,
+    pub forced: bool,
+    #[serde(skip)]
+    pub path: String,
+    #[oai(skip)]
+    pub fileinfo: FileInfo,
+}

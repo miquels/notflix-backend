@@ -11,10 +11,12 @@ mod movie;
 pub(crate) mod nfo;
 pub mod scandirs;
 mod tvshow;
+mod video;
 
 pub use movie::scan_movie_dir;
 pub use nfo::Nfo;
 pub use tvshow::scan_tvshow_dir;
+pub use video::probe as probe_video;
 
 #[async_trait]
 pub trait KodiFS {

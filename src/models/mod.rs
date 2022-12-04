@@ -10,6 +10,7 @@ mod thumb;
 mod tvshow;
 mod uniqueids;
 mod user;
+mod video;
 
 pub use episode::Episode;
 pub use fileinfo::FileInfo;
@@ -23,6 +24,7 @@ pub use thumb::{Thumb, ThumbState};
 pub use tvshow::{Season, TVShow};
 pub use uniqueids::UniqueIds;
 pub use user::{UpdateUser, User};
+pub use video::*;
 
 use anyhow::Result;
 use async_trait::async_trait;
