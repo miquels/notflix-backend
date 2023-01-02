@@ -8,8 +8,9 @@ use super::{Actor, Rating, Thumb, UniqueId};
 use crate::db::{self, FindItemBy};
 use crate::jvec::JVec;
 use crate::util::Id;
+use crate::models::Video;
 
-#[derive(Object, Serialize, Clone, Default, Debug, sqlx::FromRow)]
+#[derive(Object, Serialize, Clone, Default, Debug)]
 #[serde(default)]
 pub struct Movie {
     // Common.
@@ -28,6 +29,7 @@ pub struct Movie {
     pub nfofile: Option<FileInfo>,
 
     // Common, from filesystem scan.
+    /// Images. Thumbnails and fanart.
     #[oai(skip_serializing_if = "is_default")]
     pub thumbs: JVec<Thumb>,
 
@@ -39,13 +41,16 @@ pub struct Movie {
     #[oai(flatten)]
     pub nfo_movie: NfoMovie,
 
-    // Movie NFO
+    /// Runtime in minutes.
     #[oai(skip_serializing_if = "is_default")]
     pub runtime: Option<u32>,
 
     // Movie specific data.
     #[oai(skip)]
-    pub video: FileInfo,
+    pub video_file: FileInfo,
+
+    /// Information about the video.
+    pub video: Video,
 }
 
 impl Movie {
@@ -87,7 +92,8 @@ impl Movie {
                        m.premiered,
                        m.mpaa,
                        m.runtime AS "runtime: u32",
-                       m.video AS "video: FileInfo"
+                       m.video_file AS "video_file: FileInfo",
+                       m.video_info AS "video: Video"
                 FROM mediaitems i
                 JOIN movies m ON (m.mediaitem_id = i.id)
                 WHERE i.id = ? AND (i.deleted = 0 OR i.deleted = ?)"#,
@@ -132,6 +138,7 @@ impl Movie {
             nfo_movie.premiered,
             nfo_movie.mpaa,
             runtime,
+            video_file,
             video
         );
         Ok(Some(Box::new(m)))
@@ -193,8 +200,9 @@ impl Movie {
                     premiered,
                     mpaa,
                     runtime,
-                    video
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                    video_file,
+                    video_info
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             id,
             self.id,
             self.nfo_movie.originaltitle,
@@ -205,6 +213,7 @@ impl Movie {
             self.nfo_movie.premiered,
             self.nfo_movie.mpaa,
             self.runtime,
+            self.video_file,
             self.video,
         )
         .execute(&mut *txn)
@@ -264,7 +273,8 @@ impl Movie {
                     premiered = ?,
                     mpaa = ?,
                     runtime = ?,
-                    video = ?
+                    video_file = ?,
+                    video_info = ?
                 WHERE mediaitem_id = ?"#,
             self.nfo_movie.originaltitle,
             self.nfo_movie.sorttitle,
@@ -274,6 +284,7 @@ impl Movie {
             self.nfo_movie.premiered,
             self.nfo_movie.mpaa,
             self.runtime,
+            self.video_file,
             self.video,
             self.id
         )

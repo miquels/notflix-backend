@@ -54,7 +54,8 @@ CREATE TABLE movies(
   mpaa TEXT,
 
   -- movie
-  video JSON NOT NULL,
+  video_file JSON NOT NULL,
+  video_info JSON NOT NULL,
   runtime INTEGER
 
 --  FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)

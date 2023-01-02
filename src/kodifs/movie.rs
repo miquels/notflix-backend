@@ -26,13 +26,13 @@ pub async fn scan_movie_dir(
 
     // Loop over all directory entries.
     let mut basepath = String::new();
-    let mut video = None;
+    let mut video_file = None;
     for name in &entries {
         let caps = match IS_VIDEO.captures(name) {
             Some(caps) => caps,
             None => continue,
         };
-        video = match FileInfo::from_path(&dirpath, name).await {
+        video_file = match FileInfo::from_path(&dirpath, name).await {
             Ok(v) => Some(v),
             Err(_) => continue,
         };
@@ -41,14 +41,14 @@ pub async fn scan_movie_dir(
     }
 
     // If we didn't find a video file, return None.
-    let video = video?;
+    let video_file = video_file?;
 
     // Initial Movie.
     let mut movie = dbent.unwrap_or_else(|| {
         Box::new(Movie {
             id: Id::new(),
             collection_id: coll.collection_id as i64,
-            video: video,
+            video_file: video_file.clone(),
             ..Movie::default()
         })
     });
@@ -57,6 +57,18 @@ pub async fn scan_movie_dir(
         if let chrono::LocalResult::Single(c) = chrono::Local.timestamp_millis_opt(oldest) {
             movie.dateadded = Some(c.format("%Y-%m-%d").to_string());
         }
+    }
+
+    // If the video file is new or was changed, (re-)probe it.
+    if movie.video.video_track.is_none() || movie.video_file != video_file {
+        // We need to scan the mp4.
+        movie.video = match probe_video(&video_file.fullpath).await {
+            Ok(video) => video,
+            Err(e) => {
+                log::error!("scan_movie_dir: {}: {}", video_file.fullpath, e);
+                return None;
+            },
+        };
     }
 
     // If the directory name changed, we need to update the db.
