@@ -72,8 +72,7 @@ impl Db {
         coll: &Collection,
         name: &str,
         txn: &mut TxnHandle<'_>,
-    ) -> Result<Option<Id>>
-    {
+    ) -> Result<Option<Id>> {
         let mut need_update = false;
 
         // Try to get the item from the database by collection id and directory name.
@@ -189,12 +188,7 @@ impl Db {
         Ok(())
     }
 
-    async fn do_update_collection(
-        &self,
-        coll: &Collection,
-        txn: &mut TxnHandle<'_>,
-    ) -> Result<()>
-    {
+    async fn do_update_collection(&self, coll: &Collection, txn: &mut TxnHandle<'_>) -> Result<()> {
         // Get a list of directories from the filesystem.
         log::debug!("update_collection: scanning directory {}", coll.directory);
         let mut dirs = scandirs::scan_directories(coll, true).await;

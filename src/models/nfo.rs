@@ -38,7 +38,6 @@ pub struct Nfo {
     pub credits: JVec<String>,
     #[serde(skip_serializing_if = "is_default")]
     #[oai(flatten, skip_serializing_if = "is_default")]
-
     pub directors: JVec<String>,
     // Detail NFO (Movie + TV Show)
     #[serde(skip_serializing_if = "is_default")]
@@ -93,4 +92,3 @@ pub struct Nfo {
     pub displayepisode: Option<u32>,
 }
 impl_sqlx_traits_for!(Nfo);
-

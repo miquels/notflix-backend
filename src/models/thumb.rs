@@ -43,7 +43,6 @@ impl Thumb {
     pub async fn new(
         basedir: &str,
         path: &str,
-        coll: &Collection,
         mediaitem_id: Id,
         image_id: i64,
         aspect: &str,
@@ -61,8 +60,7 @@ impl Thumb {
             Some(ext) => ext,
             None => "jpg",
         };
-        let cid = coll.collection_id;
-        let path = format!("/api/image/{}/{}/{}.{}", cid, mediaitem_id, image_id, ext);
+        let path = format!("/api/image/{}/{}.{}", mediaitem_id, image_id, ext);
 
         let mut season = season;
         if let Some(season) = season.as_mut() {
@@ -88,7 +86,6 @@ impl Thumb {
         thumbs: &mut Vec<Thumb>,
         basedir: &str,
         path: &str,
-        coll: &Collection,
         mediaitem_id: Id,
         aspect: &str,
         season: Option<String>,
@@ -99,7 +96,7 @@ impl Thumb {
             return Ok(());
         }
         let id = thumbs.iter().fold(0, |acc, a| std::cmp::max(acc, a.image_id)) + 1;
-        let thumb = Thumb::new(basedir, path, coll, mediaitem_id, id, aspect, season).await?;
+        let thumb = Thumb::new(basedir, path, mediaitem_id, id, aspect, season).await?;
         thumbs.push(thumb);
         Ok(())
     }

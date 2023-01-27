@@ -60,7 +60,8 @@ impl MediaItem {
         };
 
         // Find the item in the database.
-        let r = sqlx::query_as!(MediaItem,
+        let r = sqlx::query_as!(
+            MediaItem,
             r#"
                 SELECT id AS "id: Id",
                        type AS "type_",

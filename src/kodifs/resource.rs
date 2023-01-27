@@ -5,16 +5,20 @@ use anyhow::Result;
 use super::Nfo;
 use crate::models::{self, FileInfo, ThumbState};
 
-const SUBTITLES: &'static[&'static str] = &[
-    "srt", "vtt",
-];
+const SUBTITLES: &'static [&'static str] = &["srt", "vtt"];
 
-const THUMBS: &'static[&'static str] = &[
-    "jpg", "jpeg", "png", "tbn",
-];
+const THUMBS: &'static [&'static str] = &["jpg", "jpeg", "png", "tbn"];
 
-const ASPECTS: &'static[&'static str] = &[
-    "banner", "clearart", "clearlogo", "discart", "fanart", "keyart", "landscape", "poster", "thumb"
+const ASPECTS: &'static [&'static str] = &[
+    "banner",
+    "clearart",
+    "clearlogo",
+    "discart",
+    "fanart",
+    "keyart",
+    "landscape",
+    "poster",
+    "thumb",
 ];
 
 #[derive(PartialEq)]
@@ -25,10 +29,10 @@ pub enum ItemType {
 }
 
 pub struct MediaData {
-    pub basedir:  String,
+    pub basedir: String,
     pub basename: String,
     pub item_type: ItemType,
-    pub item:   Box<models::MediaItem>,
+    pub item: Box<models::MediaItem>,
 }
 
 impl MediaData {
@@ -56,7 +60,7 @@ impl MediaData {
     }
 
     async fn add_mp4(&mut self, filename: &str) -> Result<bool> {
-       // TODO, what if this fails? Mark the entire item as 'deleted' ?
+        // TODO, what if this fails? Mark the entire item as 'deleted' ?
         let fileinfo = FileInfo::from_path(&self.basedir, filename).await?;
         if let Some(video_file) = self.item.video_file.as_ref() {
             if &fileinfo == video_file {
@@ -94,7 +98,6 @@ impl MediaData {
             // simple short name. nothing much to do.
             aspect = base;
         } else if self.item_type == ItemType::TvShow && base.starts_with("season") {
-
             // season related image. first, split off the aspect.
             let base = match base.rsplit_once('-') {
                 Some((base, asp)) if ASPECTS.contains(&asp) => {
@@ -120,7 +123,6 @@ impl MediaData {
                 return Ok(false);
             }
         } else {
-
             // must be an image that starts with "basename-".
             if !filename.starts_with(&self.basename) {
                 return Ok(false);
@@ -131,34 +133,21 @@ impl MediaData {
             }
 
             // followed by a valid <aspect>.
-            aspect = &base[len+1..];
+            aspect = &base[len + 1..];
             if !ASPECTS.contains(&aspect) {
                 return Ok(false);
             }
         }
 
-        // now check if we already had this image in the database.
-        let fileinfo = FileInfo::from_path(&self.basedir, filename).await?;
-        for t in self.item.thumbs.iter_mut() {
-            if t == &fileinfo {
-                t.state = ThumbState::Unchanged;
-                return Ok(true);
-            }
-        }
-
-        // add as a new image.
-        let t = models::Thumb {
-            image_id: 1,
-            fileinfo,
-            path: filename.to_string(),
-            aspect: aspect.to_string(),
-            width: None,
-            height: None,
-            quality: None,
-            season: season_name.to_string(),
-            state: ThumbState::New,
-        };
-        self.items.thumbs.push(t);
+        models::Thumb::add(
+            &mut self.item.thumbs,
+            &self.basedir,
+            filename,
+            self.item.id,
+            aspect,
+            season_name.map(str::to_string),
+        )
+        .await?;
 
         Ok(true)
     }
@@ -174,16 +163,21 @@ impl MediaData {
     fn finalize(&mut self) {
         let mut i = 0;
         while i < self.item.thumbs.len() {
-            let t = self.item.thumbs[i];
-            if t.state == ThumbState::Deleted || t.season.is_some() || t.fileinfo.path.contains('-') {
+            let t = &self.item.thumbs[i];
+            if t.state == ThumbState::Deleted || t.season.is_some() || t.fileinfo.path.contains('-')
+            {
                 continue;
             }
-            if self.item.thumbs.iter().any(|l| l.state != ThumbState::Deleted && l.season.is_none() && l.fileinfo.path.contains('-') && l.aspect == t.aspect) {
+            if self.item.thumbs.iter().any(|l| {
+                l.state != ThumbState::Deleted
+                    && l.season.is_none()
+                    && l.fileinfo.path.contains('-')
+                    && l.aspect == t.aspect
+            }) {
                 self.item.thumbs.remove(i);
             } else {
                 i += 1;
             }
         }
     }
-
 }

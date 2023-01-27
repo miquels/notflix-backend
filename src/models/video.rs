@@ -1,8 +1,8 @@
 use poem_openapi::Object;
 use serde::{Deserialize, Serialize};
 
-use crate::sqlx::impl_sqlx_traits_for;
 use super::is_default;
+use crate::sqlx::impl_sqlx_traits_for;
 
 #[derive(Object, Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
 pub struct AudioTrack {
@@ -31,7 +31,7 @@ pub struct SubtitleTrack {
 #[derive(Object, Deserialize, Serialize, Clone, Default, Debug, PartialEq)]
 pub struct VideoTrack {
     pub track_id: u32,
-    pub width:  u16,
+    pub width: u16,
     pub height: u16,
     pub codec: String,
 }

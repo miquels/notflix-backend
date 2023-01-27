@@ -8,7 +8,7 @@ use crate::models;
 // mod episode;
 // mod movie;
 pub(crate) mod nfo;
-//pub mod resource;
+pub mod resource;
 pub mod scandirs;
 // mod tvshow;
 mod video;
