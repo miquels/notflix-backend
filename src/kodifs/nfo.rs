@@ -16,7 +16,7 @@ use serde::{de, Deserialize, Serialize};
 use serde_xml_rs::from_str;
 
 use crate::jvec::JVec;
-use crate::models::{self, NfoBase, NfoMovie};
+use crate::models;
 
 /// Thumbnail
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -308,8 +308,8 @@ impl Nfo {
         Ok(nfo)
     }
 
-    /// Fill `NfoBase` with data from the nfo file.
-    pub fn to_nfo_base(&self) -> NfoBase {
+    /// Fill `models::Nfo` with data from the nfo file.
+    pub fn to_nfo(&self) -> models::Nfo {
         let mut ratings = self
             .ratings
             .rating
@@ -406,7 +406,7 @@ impl Nfo {
             }
         }
 
-        NfoBase {
+        models::Nfo {
             nfo_type: self.nfo_type.clone(),
             title: self.title.clone(),
             plot: self.plot.clone(),
@@ -416,32 +416,20 @@ impl Nfo {
             actors: JVec(actors),
             credits: JVec(self.credits.clone()),
             directors: JVec(self.director.clone()),
-        }
-    }
-
-    /// Fill `NfoMovie` with data from the nfo file.
-    pub fn to_nfo_movie(&self) -> NfoMovie {
-        let premiered = match self.premiered.clone() {
-            Some(p) => Some(p),
-            None => {
-                if let Some(mut year) = self.year.clone() {
-                    if year < 100 {
-                        year += 1900;
-                    }
-                    Some(format!("{}-01-01", year))
-                } else {
-                    None
-                }
-            },
-        };
-        NfoMovie {
             originaltitle: self.originaltitle.clone(),
             sorttitle: self.sorttitle.clone(),
             countries: JVec(self.country.clone()),
             genres: JVec(self.genre.clone()),
             studios: JVec(self.studio.clone()),
-            premiered,
+            premiered: self.premiered.clone(),
             mpaa: self.mpaa.clone(),
+            runtime: self.get_runtime_in_mins(),
+            season: self.season.clone(),
+            episode: self.episode.clone(),
+            status: self.status.clone(),
+            aired: self.status.clone(),
+            displayseason: self.displayseason.clone(),
+            displayepisode: self.displayepisode.clone(),
         }
     }
 
@@ -461,45 +449,6 @@ impl Nfo {
             return Some(d / 60);
         }
         None
-    }
-
-    pub fn update_movie(&self, item: &mut models::Movie) {
-        let title = item.nfo_base.title.take();
-        let premiered = item.nfo_movie.premiered.take();
-        item.nfo_base = self.to_nfo_base();
-        item.nfo_movie = self.to_nfo_movie();
-        item.runtime = self.get_runtime_in_mins();
-        if item.nfo_base.title.is_none() {
-            item.nfo_base.title = title;
-        }
-        if item.nfo_movie.premiered.is_none() {
-            item.nfo_movie.premiered = premiered;
-        }
-    }
-
-    pub fn update_tvshow(&self, item: &mut models::TVShow) {
-        let title = item.nfo_base.title.take();
-        item.nfo_base = self.to_nfo_base();
-        item.nfo_movie = self.to_nfo_movie();
-        item.total_seasons = self.season.clone();
-        item.total_episodes = self.episode.clone();
-        item.status = self.status.clone();
-        if item.nfo_base.title.is_none() {
-            item.nfo_base.title = title;
-        }
-    }
-
-    pub fn update_episode(&self, item: &mut models::Episode) {
-        let title = item.nfo_base.title.take();
-        item.nfo_base = self.to_nfo_base();
-        item.aired = self.aired.clone();
-        item.runtime = self.get_runtime_in_mins();
-        // item.status = self.status.clone();
-        item.displayseason = self.displayseason.clone();
-        item.displayepisode = self.displayepisode.clone();
-        if item.nfo_base.title.is_none() {
-            item.nfo_base.title = title;
-        }
     }
 }
 

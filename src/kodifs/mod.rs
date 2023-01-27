@@ -1,57 +1,35 @@
-use async_trait::async_trait;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use url::Url;
 
-use crate::collections::Collection;
+use crate::collections::{Collection, CollectionType};
 use crate::models;
 
-mod episode;
-mod movie;
+// mod episode;
+// mod movie;
 pub(crate) mod nfo;
+//pub mod resource;
 pub mod scandirs;
-mod tvshow;
+// mod tvshow;
 mod video;
 
-pub use movie::scan_movie_dir;
+// pub use movie::scan_movie_dir;
 pub use nfo::Nfo;
-pub use tvshow::scan_tvshow_dir;
+// pub use tvshow::scan_tvshow_dir;
 pub use video::probe as probe_video;
 
-#[async_trait]
-pub trait KodiFS {
-    async fn scan_directory(
-        coll: &Collection,
-        name: &str,
-        db_item: Option<Box<Self>>,
-        only_nfo: bool,
-    ) -> Option<Box<Self>>;
-}
-
-#[async_trait]
-impl KodiFS for models::TVShow {
-    async fn scan_directory(
-        coll: &Collection,
-        name: &str,
-        db_item: Option<Box<Self>>,
-        only_nfo: bool,
-    ) -> Option<Box<Self>> {
-        let item = scan_tvshow_dir(coll, name, db_item, only_nfo).await?;
-        Some(item)
-    }
-}
-
-#[async_trait]
-impl KodiFS for models::Movie {
-    async fn scan_directory(
-        coll: &Collection,
-        name: &str,
-        db_item: Option<Box<Self>>,
-        only_nfo: bool,
-    ) -> Option<Box<Self>> {
-        let item = scan_movie_dir(coll, name, db_item, only_nfo).await?;
-        Some(item)
-    }
+pub async fn scan_mediaitem_dir(
+    coll: &Collection,
+    dirname: &str,
+    dbent: Option<Box<models::MediaItem>>,
+    only_nfo: bool,
+) -> Option<Box<models::MediaItem>> {
+    /*
+    match coll.type_ {
+        CollectionType::Movie => scan_movie_dir(coll, dirname, dbent, only_nfo).await,
+        CollectionType::TVShow => scan_tvshow_dir(coll, dirname, dbent, only_nfo).await,
+    }*/
+    todo!()
 }
 
 // Helper macro.

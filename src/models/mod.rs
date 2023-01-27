@@ -1,151 +1,32 @@
-mod episode;
+// mod episode;
 mod fileinfo;
 // mod image;
 mod mediainfo;
+mod mediaitem;
 mod misc;
-mod movie;
+// mod movie;
 mod nfo;
 mod session;
 mod thumb;
-mod tvshow;
+// mod tvshow;
 mod uniqueids;
 mod user;
 mod video;
 
-pub use episode::Episode;
+// pub use episode::Episode;
 pub use fileinfo::FileInfo;
 // pub use self::image::{Image, GetImage, ImageState};
 pub use mediainfo::{MediaInfo, MediaInfoOverview};
+pub use mediaitem::MediaItem;
 pub use misc::*;
-pub use movie::Movie;
-pub use nfo::{NfoBase, NfoMovie};
+// pub use movie::Movie;
+pub use nfo::Nfo;
 pub use session::Session;
 pub use thumb::{Thumb, ThumbState};
-pub use tvshow::{Season, TVShow};
+// pub use tvshow::{Season, TVShow};
 pub use uniqueids::UniqueIds;
 pub use user::{UpdateUser, User};
 pub use video::*;
-
-use anyhow::Result;
-use async_trait::async_trait;
-
-use crate::db;
-use crate::util::{Id, SystemTimeToUnixTime};
-
-#[async_trait]
-pub trait MediaItem {
-    fn id(&self) -> Id;
-    fn set_id(&mut self, id: Id);
-    fn set_collection_id(&mut self, id: i64);
-    fn uniqueids(&self) -> &'_ [UniqueId];
-    fn lastmodified(&self) -> i64;
-    fn nfo_lastmodified(&self) -> Option<i64>;
-    fn undelete(&mut self);
-    async fn lookup_by(
-        dbh: &mut db::TxnHandle<'_>,
-        find: &db::FindItemBy<'_>,
-    ) -> Result<Option<Box<Self>>>;
-    async fn insert(&self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()>;
-    async fn update(&self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()>;
-}
-
-#[async_trait]
-impl MediaItem for Movie {
-    fn id(&self) -> Id {
-        self.id.clone()
-    }
-
-    fn set_id(&mut self, id: Id) {
-        self.id = id;
-    }
-
-    fn set_collection_id(&mut self, id: i64) {
-        self.collection_id = id;
-    }
-
-    fn uniqueids(&self) -> &'_ [UniqueId] {
-        self.nfo_base.uniqueids.0.as_ref()
-    }
-
-    fn lastmodified(&self) -> i64 {
-        self.lastmodified
-    }
-
-    fn nfo_lastmodified(&self) -> Option<i64> {
-        self.nfofile.as_ref().map(|m| m.modified.unixtime_ms())
-    }
-
-    fn undelete(&mut self) {
-        if self.deleted {
-            self.deleted = false;
-            self.lastmodified = 0;
-        }
-    }
-
-    async fn lookup_by(
-        dbh: &mut db::TxnHandle<'_>,
-        find: &db::FindItemBy<'_>,
-    ) -> Result<Option<Box<Self>>> {
-        Self::lookup_by(dbh, find).await
-    }
-
-    async fn insert(&self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()> {
-        self.insert(txn).await
-    }
-
-    async fn update(&self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()> {
-        self.update(txn).await
-    }
-}
-
-#[async_trait]
-impl MediaItem for TVShow {
-    fn id(&self) -> Id {
-        self.id.clone()
-    }
-
-    fn set_id(&mut self, id: Id) {
-        self.id = id;
-    }
-
-    fn set_collection_id(&mut self, id: i64) {
-        self.collection_id = id;
-    }
-
-    fn uniqueids(&self) -> &'_ [UniqueId] {
-        self.nfo_base.uniqueids.0.as_ref()
-    }
-
-    fn lastmodified(&self) -> i64 {
-        self.lastmodified
-    }
-
-    fn nfo_lastmodified(&self) -> Option<i64> {
-        self.nfofile.as_ref().map(|m| m.modified.unixtime_ms())
-    }
-
-    fn undelete(&mut self) {
-        if self.deleted {
-            self.deleted = false;
-            self.lastmodified = 0;
-        }
-    }
-
-    async fn lookup_by(
-        dbh: &mut db::TxnHandle<'_>,
-        find: &db::FindItemBy<'_>,
-    ) -> Result<Option<Box<Self>>> {
-        Self::lookup_by(dbh, find, true).await
-    }
-
-    async fn insert(&self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()> {
-        self.insert(txn).await
-    }
-
-    async fn update(&self, txn: &mut db::TxnHandle<'_>) -> anyhow::Result<()> {
-        self.update(txn).await
-    }
-}
 
 // helper function.
 fn is_default<'a, T>(t: &'a T) -> bool

@@ -8,16 +8,16 @@ use poem_openapi::{
 use crate::server::{SessionFC, SessionFK, SharedState};
 use crate::util::Id;
 
-mod collection;
-mod image;
-mod movie;
-mod tvshow;
+//mod collection;
+//mod image;
+//mod movie;
+//mod tvshow;
 mod user;
 
-use self::image::*;
-use collection::*;
-use movie::*;
-use tvshow::*;
+//use self::image::*;
+//use collection::*;
+//use movie::*;
+//use tvshow::*;
 use user::*;
 
 #[derive(Tags)]
@@ -69,7 +69,7 @@ impl Api {
         let resp = self.logout(session.0, req).await?;
         Ok(resp)
     }
-
+/*
     /// List collections.
     #[oai(path = "/collections", method = "get", tag = "ApiTags::Collection")]
     async fn api_get_collections(&self, _session: SessionFK) -> Result<GetCollectionsResponse> {
@@ -134,7 +134,7 @@ impl Api {
         let res = self.get_image(collection_id.0, mid, image_id.0, whq, req).await?;
         Ok(res)
     }
-
+*/
     /// Create a new user
     #[oai(path = "/users", method = "post", tag = "ApiTags::User")]
     async fn api_create_user(

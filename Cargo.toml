@@ -7,9 +7,9 @@ edition = "2021"
 name = "notflix_backend"
 path = "src/lib.rs"
 
-[[bin]]
-name = "notflix_backend"
-path = "src/main.rs"
+#[[bin]]
+#name = "notflix_backend"
+#path = "src/main.rs"
 
 [features]
 default = []
@@ -24,9 +24,12 @@ arraystring = { version = "0.3.0", features = ["serde-traits"] }
 async-recursion = "1.0"
 async-stream = "0.3.3"
 async-trait = "0.1.58"
+chardetng = "0.1.17"
 chrono = { version = "0.4.23", features = ["std", "clock"] }
 clap = "2.33"
+compact_str = "0.6.1"
 curlyconf = "0.1.0"
+encoding_rs = "0.8.31"
 fast_image_resize = { version = "2.2.0", optional = true }
 flume = "0.10.14"
 futures-core = "0.3.21"
@@ -56,6 +59,7 @@ tracing = "0.1"
 tracing-subscriber = { version="0.3", features = ["env-filter"] }
 typenum = "1.15.0"
 url = "2.2.2"
+whatlang = "0.16.2"
 zune-jpeg = { version = "0.2.0", optional = true }
 
 mp4lib = { version = "0.1", features = ["hyper-body"], path = "../mp4/mp4lib" }

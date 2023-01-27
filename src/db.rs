@@ -10,12 +10,18 @@ use anyhow::{Context, Result};
 use sqlx::sqlite::SqlitePool;
 
 use crate::collections::Collection;
-use crate::kodifs::{scandirs, KodiFS};
-use crate::models::{MediaItem, Movie, TVShow, UniqueId, UniqueIds};
-use crate::util::Id;
+use crate::jvec::JVec;
+use crate::kodifs::{self, scandirs};
+use crate::models::{MediaItem, UniqueId, UniqueIds};
+use crate::util::{Id, SystemTimeToUnixTime};
 
 pub type DbHandle = SqlitePool;
 pub type TxnHandle<'a> = sqlx::Transaction<'a, sqlx::Sqlite>;
+
+enum ItemType {
+    Movie,
+    TVShow,
+}
 
 #[derive(Clone)]
 pub struct Db {
@@ -61,23 +67,19 @@ impl Db {
     }
 
     // Update one movie.
-    pub async fn update_movie<M>(
+    pub async fn update_mediaitem(
         &self,
         coll: &Collection,
         name: &str,
         txn: &mut TxnHandle<'_>,
     ) -> Result<Option<Id>>
-    where
-        M: MediaItem,
-        M: KodiFS,
-        M: Default,
     {
         let mut need_update = false;
 
         // Try to get the item from the database by collection id and directory name.
         log::trace!("Db::update_mediaitem: database lookup for {}", name);
         let by = FindItemBy::directory(coll.collection_id, name, false);
-        let mut db_item = M::lookup_by(&mut *txn, &by).await?;
+        let mut db_item = MediaItem::lookup_by(&mut *txn, &by).await?;
         log::trace!("Db::update_mediaitem: found: {:?}", db_item.is_some());
 
         // If not found, read the NFO file to get the uniqueids, and search for that.
@@ -85,36 +87,41 @@ impl Db {
             log::trace!("Db::update_mediaitem: not found by name in db: {}", name);
 
             // Open the mediaitem's NFO file to read the unqiqueids.
-            if let Some(mv) = M::scan_directory(coll, name, None, true).await {
+            if let Some(mv) = kodifs::scan_mediaitem_dir(coll, name, None, true).await {
                 // Try to find the mediaitem in the db by uniqueid.
-                let by = FindItemBy::uniqueids(mv.uniqueids(), true);
-                if let Some(mut oldmv) = M::lookup_by(&mut *txn, &by).await? {
-                    log::trace!("Db::update_mediaitem: found item in db by uniqueid");
-                    oldmv.set_collection_id(coll.collection_id as i64);
-                    db_item = Some(oldmv);
-                    need_update = true;
-                } else {
-                    // Not in the db, but perhaps we did have it before,
-                    // and we remembered the ID it had then.
-                    if let Some(id) = lookup(&mut *txn, &by).await? {
-                        log::trace!("Db::update_mediaitem:: found item id in db by uniqueid");
-                        let mut mv = Box::new(M::default());
-                        mv.set_id(id);
-                        mv.set_collection_id(coll.collection_id as i64);
-                        db_item = Some(mv);
+                if let Some(nfo_info) = mv.nfo_info.as_ref() {
+                    let by = FindItemBy::uniqueids(&nfo_info.uniqueids, true);
+                    if let Some(mut oldmv) = MediaItem::lookup_by(&mut *txn, &by).await? {
+                        log::trace!("Db::update_mediaitem: found item in db by uniqueid");
+                        oldmv.collection_id = coll.collection_id;
+                        db_item = Some(oldmv);
                         need_update = true;
+                    } else {
+                        // Not in the db, but perhaps we did have it before,
+                        // and we remembered the ID it had then.
+                        if let Some(id) = lookup(&mut *txn, &by).await? {
+                            log::trace!("Db::update_mediaitem:: found item id in db by uniqueid");
+                            let mut mv = Box::new(MediaItem::default());
+                            mv.id = id;
+                            mv.collection_id = coll.collection_id;
+                            db_item = Some(mv);
+                            need_update = true;
+                        }
                     }
                 }
             }
         }
         if let Some(db_item) = db_item.as_mut() {
-            db_item.undelete();
+            if db_item.deleted {
+                db_item.deleted = false;
+                db_item.lastmodified = 0;
+            }
         }
-        let old_lastmodified = db_item.as_ref().map(|m| m.lastmodified()).unwrap_or(0);
+        let old_lastmodified = db_item.as_ref().map(|m| m.lastmodified).unwrap_or(0);
         let is_new = db_item.is_none();
 
         // Now scan the item's directory.
-        let item = match M::scan_directory(coll, name, db_item, false).await {
+        let item = match kodifs::scan_mediaitem_dir(coll, name, db_item, false).await {
             Some(mv) => mv,
             None => {
                 // FIXME This is an error, but non-fatal, the transaction was not aborted.
@@ -130,7 +137,7 @@ impl Db {
             item.insert(&mut *txn)
                 .await
                 .with_context(|| format!("failed to insert db for {}", name))?;
-        } else if item.lastmodified() > old_lastmodified || need_update {
+        } else if item.lastmodified > old_lastmodified || need_update {
             // There was an update, so update the database.
             log::debug!("Db::update_mediaitem: updating item in the db: {}", name);
             item.update(&mut *txn)
@@ -141,18 +148,20 @@ impl Db {
         }
 
         log::trace!("checking UniqueIds..");
-        if let Some(nfo_lastmodified) = item.nfo_lastmodified() {
-            if nfo_lastmodified > old_lastmodified {
+        if let Some(nfo_lastmodified) = item.nfo_file.map(|f| f.modified) {
+            if nfo_lastmodified.unixtime_ms() > old_lastmodified {
                 log::trace!("updating UniqueIds..");
-                let uids = UniqueIds::new(item.id());
-                uids.update(&mut *txn, item.uniqueids())
+                let uids = UniqueIds::new(item.id);
+                let empty = JVec::new();
+                let orig_uids = item.nfo_info.as_ref().map(|n| &n.uniqueids).unwrap_or(&empty);
+                uids.update(&mut *txn, orig_uids)
                     .await
                     .with_context(|| format!("failed to update uniqueids table for {}", name))?;
             }
         }
 
         log::trace!("done.");
-        Ok(Some(item.id()))
+        Ok(Some(item.id))
     }
 
     // Update a collection of movies / tvshows.
@@ -161,17 +170,7 @@ impl Db {
     pub async fn update_collection(&self, coll: &Collection) -> Result<()> {
         let r = async {
             let mut txn = self.handle.begin().await?;
-
-            let res = match coll.type_.as_str() {
-                "movies" => self.do_update_collection::<Movie>(coll, &mut txn).await,
-                "tvseries" | "tvshows" => self.do_update_collection::<TVShow>(coll, &mut txn).await,
-                _ => anyhow::bail!(
-                    "Db::update_collection({}): unknown type {}",
-                    coll.directory,
-                    coll.type_
-                ),
-            };
-            match res {
+            match self.do_update_collection(coll, &mut txn).await {
                 Ok(()) => Ok(txn.commit().await?),
                 Err(e) => {
                     let _ = txn.rollback().await;
@@ -190,15 +189,11 @@ impl Db {
         Ok(())
     }
 
-    async fn do_update_collection<M>(
+    async fn do_update_collection(
         &self,
         coll: &Collection,
         txn: &mut TxnHandle<'_>,
     ) -> Result<()>
-    where
-        M: KodiFS,
-        M: MediaItem,
-        M: Default,
     {
         // Get a list of directories from the filesystem.
         log::debug!("update_collection: scanning directory {}", coll.directory);
@@ -263,9 +258,9 @@ impl Db {
                 },
             }
 
-            // Ok, we have to do a full rescan of this movie.
+            // Ok, we have to do a full rescan of this item.
             // self.update_movie will only return an error for SQL errors.
-            if self.update_movie::<M>(coll, &dbitem.dir, &mut *txn).await?.is_some() {
+            if self.update_mediaitem(coll, &dbitem.dir, &mut *txn).await?.is_some() {
                 // successfully updated.
                 dbitem.keep = true;
             }
@@ -276,7 +271,7 @@ impl Db {
         log::trace!("adding new directories ({})", dirs.len());
         for dir in dirs.keys() {
             log::trace!("adding {}", dir);
-            if let Some(id) = self.update_movie::<M>(coll, dir, &mut *txn).await? {
+            if let Some(id) = self.update_mediaitem(coll, dir, &mut *txn).await? {
                 map.remove(&id);
             }
         }

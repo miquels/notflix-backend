@@ -11,94 +11,43 @@ CREATE TABLE collections(
   directory TEXT NOT NULL
 );
 
--- This is the base table for movies, tvshows, season, episodes.
--- It contains info generic for any media type.
+-- This table contains the info for a movie, tvshow or episode.
 CREATE TABLE mediaitems (
-  -- AUTOINCREMENT is important, we should not re-use mediaitems.id.
   id TEXT PRIMARY KEY NOT NULL,
   collection_id TEXT NOT NULL,
-  -- unix timestamp of anything contained in this item.
-  lastmodified BIGINT NOT NULL,
-  -- directory is a FileInfo, path + inode + size.
-  directory JSON NOT NULL,
-  deleted INTEGER DEFAULT 0 NOT NULL,
+  -- movie / tvshow / episode.
   type VARCHAR(20) NOT NULL,
-  nfofile JSON,
-  title VARCHAR(255),
-  plot TEXT,
-  tagline TEXT,
-  dateadded TEXT,
-  -- ratings MIGHT move to the ratings table
-  ratings JSON NOT NULL DEFAULT "[]",
-  -- thumb and fanart will move to the `images` table which will backref
-  thumbs JSON NOT NULL DEFAULT "[]",
-  -- uniqueids will move to the `uniqueids` table which will backref
-  uniqueids JSON NOT NULL DEFAULT "{}",
-  -- this might all move to a `credits` table
-  actors JSON NOT NULL DEFAULT "[]",
-  credits JSON NOT NULL DEFAULT "[]",
-  directors JSON NOT NULL DEFAULT "[]"
-);
+  -- unix timestamp of the file/item with latest modification date.
+  lastmodified BIGINT NOT NULL,
+  -- date added in YYYY-MM-DD.
+  dateadded VARCHAR(10) NOT NULL,
+  -- directory relative to collection directory (FileInfo).
+  -- can be NUL because episodes don't have a specific directory.
+  directory JSON,
+  -- was this item deleted.
+  deleted INTEGER DEFAULT 0 NOT NULL,
 
-CREATE TABLE movies(
-  id TEXT PRIMARY KEY NOT NULL,
-  mediaitem_id TEXT NOT NULL,
+  -- title.
+  title TEXT,
 
-  -- common to movies and tvshows
-  originaltitle TEXT,
-  sorttitle TEXT,
-  countries JSON NOT NULL DEFAULT "[]",
-  genres JSON NOT NULL DEFAULT "[]",
-  studios JSON NOT NULL DEFAULT "[]",
-  premiered TEXT,
-  mpaa TEXT,
+  -- nfo
+  nfo_file JSON,
+  nfo_info JSON,
 
-  -- movie
-  video_file JSON NOT NULL,
-  video_info JSON NOT NULL,
-  runtime INTEGER
-
---  FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
-);
-
-CREATE TABLE tvshows(
-  id TEXT PRIMARY KEY NOT NULL,
-  mediaitem_id TEXT NOT NULL,
-
-  -- common to movies and tvshows
-  originaltitle TEXT,
-  sorttitle TEXT,
-  countries JSON NOT NULL DEFAULT "[]",
-  genres JSON NOT NULL DEFAULT "[]",
-  studios JSON NOT NULL DEFAULT "[]",
-  premiered TEXT,
-  mpaa TEXT,
-
-  -- tvshow
-  seasons INTEGER,
-  episodes INTEGER,
-  status TEXT,
-
-  FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
-);
-
-CREATE TABLE episodes(
-  id TEXT PRIMARY KEY NOT NULL,
-  mediaitem_id TEXT NOT NULL,
-  tvshow_id TEXT NOT NULL,
-
- -- episode
-  video JSON NOT NULL,
-  aired TEXT,
-  runtime INTEGER,
-  season INTEGER NOT NULL,
-  episode INTEGER NOT NULL,
-  displayseason INTEGER,
-  displayepisode INTEGER,
+  -- images.
   thumbs JSON NOT NULL DEFAULT "[]",
 
-  FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id),
-  FOREIGN KEY(tvshow_id) REFERENCES mediaitems(id)
+  -- subtitles.
+  subtitles JSON NOT NULL DEFAULT "[]",
+
+  -- video. can be NULL if this is a tvshow.
+  video_file JSON,
+  video_info JSON,
+
+  -- for episodes.
+  season INTEGER,
+  episode INTEGER,
+  tvshow_id TEXT
 );
 
 CREATE TABLE images(
@@ -143,20 +92,6 @@ CREATE TABLE uniqueids(
   -- FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
 );
 CREATE UNIQUE INDEX uniqueids_idx ON uniqueids(idtype, uniqueid);
-
-/*
-CREATE TABLE actors_in_item(
-  id INTEGER PRIMARY KEY,
-  mediaitem_id INTEGER NOT NULL,
-
-  name TEXT NOT NULL,
-  role TEXT,
-  order_prio INTEGER,
-  thumb_id INTEGER,
-
-  FOREIGN KEY(mediaitem_id) REFERENCES mediaitems(id)
-);
-*/
 
 CREATE TABLE users(
   id INTEGER PRIMARY KEY AUTOINCREMENT,

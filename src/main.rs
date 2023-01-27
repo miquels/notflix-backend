@@ -5,7 +5,6 @@ use notflix_backend::collections;
 use notflix_backend::config;
 use notflix_backend::db;
 use notflix_backend::kodifs;
-use notflix_backend::models::{Movie, TVShow};
 use notflix_backend::server;
 
 #[derive(StructOpt, Debug)]
@@ -56,16 +55,8 @@ pub struct ScanDirOpts {
     pub movie: bool,
 
     #[structopt(long)]
-    /// Scan movie directories.
-    pub movies: bool,
-
-    #[structopt(long)]
     /// Scan tvshow directory.
     pub tvshow: bool,
-
-    #[structopt(long)]
-    /// Scan tvshow directories.
-    pub tvshows: bool,
 
     /// Directory name.
     pub directory: String,
@@ -143,51 +134,29 @@ async fn dumpdb(_opts: DumpDbOpts) -> anyhow::Result<()> {
 }
 
 async fn scandir(opts: ScanDirOpts) -> anyhow::Result<()> {
-    if opts.movie || opts.movies {
-        let mut coll = collections::Collection {
-            name: "Movies".to_string(),
-            type_: "movies".to_string(),
-            directory: opts.directory.clone(),
-            baseurl: "/".to_string(),
-            ..collections::Collection::default()
-        };
-        if opts.movie {
-            let mut m = opts.directory.rsplitn(2, '/');
-            let file_name = m.next().unwrap();
-            coll.directory = m.next().unwrap_or(".").to_string();
-
-            match kodifs::scan_movie_dir(&coll, file_name, None, false).await {
-                Some(item) => println!("{}", serde_json::to_string_pretty(&item)?),
-                None => println!("no movie found"),
-            }
-        }
-        if opts.movies {
-            eprintln!("not implemented");
-        }
+    let mut coll = collections::Collection {
+        name: "Movies".to_string(),
+        type_: collections::CollectionType::Movies,
+        collection_id: 1,
+        directory: opts.directory.clone(),
+        baseurl: "/".to_string(),
+        ..collections::Collection::default()
+    };
+    if opts.tvshow {
+        coll.name = "TV Show".to_string();
+        coll.type_ = collections::CollectionType::TVShows;
+        coll.collection_id = 2;
     }
-    if opts.tvshow || opts.tvshows {
-        let mut coll = collections::Collection {
-            name: "TV Shows".to_string(),
-            collection_id: 2,
-            type_: "tvshows".to_string(),
-            directory: opts.directory.clone(),
-            baseurl: "/".to_string(),
-            ..collections::Collection::default()
-        };
-        if opts.tvshow {
-            let mut m = opts.directory.rsplitn(2, '/');
-            let file_name = m.next().unwrap();
-            coll.directory = m.next().unwrap_or(".").to_string();
 
-            match kodifs::scan_tvshow_dir(&mut coll, file_name, None, false).await {
-                Some(item) => println!("{}", serde_json::to_string_pretty(&item)?),
-                None => println!("no show found"),
-            }
-        }
-        if opts.tvshows {
-            eprintln!("not implemented");
-        }
+    let mut m = opts.directory.rsplitn(2, '/');
+    let file_name = m.next().unwrap();
+    coll.directory = m.next().unwrap_or(".").to_string();
+
+    match kodifs::scan_mediaitem_dir(&coll, file_name, None, false).await {
+        Some(item) => println!("{}", serde_json::to_string_pretty(&item)?),
+        None => println!("no {} found", coll.subtype()),
     }
+
     Ok(())
 }
 
@@ -196,50 +165,34 @@ async fn update(opts: UpdateOpts) -> anyhow::Result<()> {
 
     let mut coll = collections::Collection {
         name: "Movies".to_string(),
-        type_: "movies".to_string(),
+        type_: collections::CollectionType::Movies,
         directory: opts.directory.clone(),
         collection_id: 1,
         baseurl: "/".to_string(),
         ..collections::Collection::default()
     };
-
-    if opts.movie || opts.movies {
-        if opts.movie {
-            let mut m = opts.directory.rsplitn(2, '/');
-            let file_name = m.next().unwrap();
-            coll.directory = m.next().unwrap_or(".").to_string();
-
-            let mut txn = db.handle.begin().await?;
-            db.update_movie::<Movie>(&coll, file_name, &mut txn).await?;
-            txn.commit().await?;
-            println!("movie {} updated!", file_name);
-        }
-        if opts.movies {
-            db.update_collection(&coll).await?;
-            println!("collection {} updated!", opts.directory);
-        }
-    }
     if opts.tvshow || opts.tvshows {
         coll.name = "TVShows".to_string();
-        coll.type_ = "tvshows".to_string();
+        coll.type_ = collections::CollectionType::TVShows;
         coll.collection_id = 2;
-
-        if opts.tvshow {
-            let mut m = opts.directory.rsplitn(2, '/');
-            let file_name = m.next().unwrap();
-            coll.directory = m.next().unwrap_or(".").to_string();
-
-            log::trace!("update tvshow {} in dir {}", file_name, coll.directory);
-            let mut txn = db.handle.begin().await?;
-            db.update_movie::<TVShow>(&coll, file_name, &mut txn).await?;
-            txn.commit().await?;
-            println!("tvshow {} updated!", file_name);
-        }
-        if opts.tvshows {
-            db.update_collection(&coll).await?;
-            println!("collection {} updated!", opts.directory);
-        }
     }
+
+    if opts.movie || opts.tvshow {
+        let mut m = opts.directory.rsplitn(2, '/');
+        let file_name = m.next().unwrap();
+        coll.directory = m.next().unwrap_or(".").to_string();
+
+        let mut txn = db.handle.begin().await?;
+        db.update_mediaitem(&coll, file_name, &mut txn).await?;
+        txn.commit().await?;
+        println!("{} {} updated!", coll.subtype(), file_name);
+    }
+
+    if opts.movies || opts.tvshows {
+        db.update_collection(&coll).await?;
+        println!("collection {} updated!", opts.directory);
+    }
+
     Ok(())
 }
 

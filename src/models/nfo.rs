@@ -10,7 +10,7 @@ pub use crate::kodifs::nfo::NfoType;
 
 #[derive(Object, Serialize, Deserialize, Clone, Default, Debug, sqlx::FromRow)]
 #[serde(default)]
-pub struct NfoBase {
+pub struct Nfo {
     // Basic NFO
     #[serde(skip_serializing_if = "is_default")]
     #[oai(skip)]
@@ -38,12 +38,8 @@ pub struct NfoBase {
     pub credits: JVec<String>,
     #[serde(skip_serializing_if = "is_default")]
     #[oai(flatten, skip_serializing_if = "is_default")]
-    pub directors: JVec<String>,
-}
-impl_sqlx_traits_for!(NfoBase);
 
-#[derive(Object, Serialize, Deserialize, Clone, Default, Debug, sqlx::FromRow)]
-pub struct NfoMovie {
+    pub directors: JVec<String>,
     // Detail NFO (Movie + TV Show)
     #[serde(skip_serializing_if = "is_default")]
     #[oai(skip_serializing_if = "is_default")]
@@ -66,36 +62,35 @@ pub struct NfoMovie {
     #[serde(skip_serializing_if = "is_default")]
     #[oai(skip_serializing_if = "is_default")]
     pub mpaa: Option<String>,
-}
-impl_sqlx_traits_for!(NfoMovie);
 
-// #[sqlx(flatten)] doesn't work with the query_as! macro.
-// So we use query! instead, and then use this macro to copy the
-// result from query! into Movie / TVShow / Episode.
-macro_rules! build_struct {
-    (@E $e:expr) => {
-        $e
-    };
-    (@E $($tt:tt)*) => {
-        compile_error!(stringify!("build_struct: @E:" $($tt)*));
-    };
-    (@V $src:tt, $left:tt.$right:tt) => {
-        build_struct!(@E $src.$right)
-    };
-    (@V $src:tt, $left:tt) => {
-        build_struct!(@E $src.$left)
-    };
-    (@V $($tt:tt)*) => {
-        compile_error!(stringify!("build_struct: @V:" $($tt)*));
-    };
-    ($struct:ident, $src:tt, $($field:tt $(.$field2:tt)*),+) => {
-        {
-            let mut v = $struct::default();
-            $(
-                build_struct!(@E v.$field $(.$field2)*) = build_struct!(@V $src, $field $(.$field2)*);
-            )+
-            v
-        }
-    };
+    // Detail NFO (movie + episode)
+    #[serde(skip_serializing_if = "is_default")]
+    #[oai(skip_serializing_if = "is_default")]
+    pub runtime: Option<u32>,
+
+    // Detail NFO (tvshow)
+    #[serde(skip_serializing_if = "is_default")]
+    #[oai(skip_serializing_if = "is_default")]
+    pub status: Option<String>,
+
+    // Detail NFO (tvshow + episode)
+    #[serde(skip_serializing_if = "is_default")]
+    #[oai(skip_serializing_if = "is_default")]
+    pub season: Option<u32>,
+    #[serde(skip_serializing_if = "is_default")]
+    #[oai(skip_serializing_if = "is_default")]
+    pub episode: Option<u32>,
+
+    // Detail NFO (episode)
+    #[serde(skip_serializing_if = "is_default")]
+    #[oai(skip_serializing_if = "is_default")]
+    pub aired: Option<String>,
+    #[serde(skip_serializing_if = "is_default")]
+    #[oai(skip_serializing_if = "is_default")]
+    pub displayseason: Option<u32>,
+    #[serde(skip_serializing_if = "is_default")]
+    #[oai(skip_serializing_if = "is_default")]
+    pub displayepisode: Option<u32>,
 }
-pub(crate) use build_struct;
+impl_sqlx_traits_for!(Nfo);
+
