@@ -89,16 +89,16 @@ impl Thumb {
         mediaitem_id: Id,
         aspect: &str,
         season: Option<String>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let fileinfo = FileInfo::from_path(basedir, path).await?;
         if let Some(thumb) = thumbs.iter_mut().find(|t| t.fileinfo == fileinfo) {
             thumb.state = ThumbState::Unchanged;
-            return Ok(());
+            return Ok(false);
         }
         let id = thumbs.iter().fold(0, |acc, a| std::cmp::max(acc, a.image_id)) + 1;
         let thumb = Thumb::new(basedir, path, mediaitem_id, id, aspect, season).await?;
         thumbs.push(thumb);
-        Ok(())
+        Ok(true)
     }
 
     pub fn update_mediaitem_id(&mut self, mediaitem_id: Id) {

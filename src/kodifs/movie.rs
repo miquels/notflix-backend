@@ -3,15 +3,17 @@ use std::time::SystemTime;
 
 use super::*;
 use crate::collections::*;
-use crate::models::{FileInfo, Movie, Thumb};
+use crate::models::{FileInfo, MediaItem, Thumb};
 use crate::util::{Id, SystemTimeToUnixTime};
+use super::resource::{ItemType, MediaData};
 
 pub async fn scan_movie_dir(
     coll: &Collection,
     mut dirname: &str,
-    dbent: Option<Box<Movie>>,
+    dbent: Option<Box<MediaItem>>,
     only_nfo: bool,
-) -> Option<Box<Movie>> {
+) -> Option<Box<MediaItem>> {
+
     // First get all directory entries.
     dirname = dirname.trim_end_matches('/');
     let dirinfo = FileInfo::from_path(&coll.directory, dirname).await.ok()?;
@@ -24,147 +26,70 @@ pub async fn scan_movie_dir(
         return None;
     }
 
-    // Loop over all directory entries.
-    let mut basepath = String::new();
-    let mut video_file = None;
-    for name in &entries {
-        let caps = match IS_VIDEO.captures(name) {
-            Some(caps) => caps,
-            None => continue,
-        };
-        video_file = match FileInfo::from_path(&dirpath, name).await {
-            Ok(v) => Some(v),
-            Err(_) => continue,
-        };
-        basepath = caps[1].to_string();
-        break;
-    }
-
-    // If we didn't find a video file, return None.
-    let video_file = video_file?;
+    // Must have an mp4 file - get the basename
+    let basename = match entries.iter().find(|v| v.ends_with(".mp4")) {
+        Some(file) => file.strip_suffix(".mp4").unwrap(),
+        None => return None,
+    };
 
     // Initial Movie.
     let mut movie = dbent.unwrap_or_else(|| {
-        Box::new(Movie {
+        Box::new(MediaItem {
             id: Id::new(),
-            collection_id: coll.collection_id as i64,
-            video_file: video_file.clone(),
-            ..Movie::default()
+            collection_id: coll.collection_id,
+            ..MediaItem::default()
         })
     });
     movie.lastmodified = newest;
-    if movie.dateadded.is_none() {
+    if movie.dateadded == "" {
         if let chrono::LocalResult::Single(c) = chrono::Local.timestamp_millis_opt(oldest) {
-            movie.dateadded = Some(c.format("%Y-%m-%d").to_string());
+            movie.dateadded = c.format("%Y-%m-%d").to_string();
         }
-    }
-
-    // If the video file is new or was changed, (re-)probe it.
-    if movie.video.video_track.is_none() || movie.video_file != video_file {
-        // We need to scan the mp4.
-        movie.video = match probe_video(&video_file.fullpath).await {
-            Ok(video) => video,
-            Err(e) => {
-                log::error!("scan_movie_dir: {}: {}", video_file.fullpath, e);
-                return None;
-            },
-        };
     }
 
     // If the directory name changed, we need to update the db.
-    if movie.directory.path != dirname {
-        if movie.directory.path != "" {
+    if let Some(fileinfo) = movie.directory.as_ref() {
+        if fileinfo.path != dirname {
             log::debug!(
-                "Movie::scan_movie_dir: directory rename {} -> {}",
-                movie.directory.path,
+                "kodifs::scan_movie_dir: directory rename {} -> {}",
+                fileinfo.path,
                 dirname
             );
+            movie.lastmodified = SystemTime::now().unixtime_ms();
         }
-        movie.lastmodified = SystemTime::now().unixtime_ms();
     }
-    movie.directory = dirinfo;
+    movie.directory = Some(dirinfo);
 
     // If the directory name ends with <space>(YYYY) then it's a year.
     // Remember that year as backup in case there's no NFO file.
     let (title, year) = match IS_YEAR.captures(dirname) {
-        Some(caps) => (Some(caps[1].trim().to_string()), caps[2].parse::<u32>().ok()),
-        None => (Some(dirname.to_string()), None),
+        Some(caps) => (caps[1].trim().to_string(), caps[2].parse::<u32>().ok()),
+        None => (dirname.to_string(), None),
     };
-    movie.nfo_base.title = title;
-    if let Some(year) = year {
-        movie.nfo_movie.premiered = Some(format!("{}-01-01", year));
-    }
+    movie.title = title;
+    movie.year = year;
 
-    // Loop over all directory entries.
-    for name in &entries {
-        let mut i = name.split('/').last().unwrap().rsplitn(2, '.');
-        let (base, ext) = match (i.next(), i.next()) {
-            (Some(ext), Some(base)) => (base, ext),
-            _ => continue,
-        };
+    // Initialize mediadata.
+    let mut mediadata = MediaData {
+        basedir: dirpath,
+        basename: basename.to_string(),
+        item_type: ItemType::Movie,
+        updated: false,
+        item: movie,
+    };
 
-        let mut aux = "";
-        if let Some(suffix) = name.strip_prefix(&basepath) {
-            if suffix.len() > ext.len() + 2 {
-                if suffix.starts_with(".") || suffix.starts_with("-") {
-                    aux = suffix[1..].strip_suffix(ext).unwrap();
-                    aux = &aux[..aux.len() - 1];
-                }
-            }
-        }
-
-        // NFO file found. Parse it.
-        if ext == "nfo" {
-            let (mut file, nfofile) = match FileInfo::open(&dirpath, name).await {
-                Ok((file, fileinfo)) => (file, Some(fileinfo)),
-                Err(_) => continue,
-            };
-
-            if movie.nfofile == nfofile {
-                // No change, nothing to do!
-                continue;
-            }
-
-            match super::Nfo::read(&mut file).await {
-                Ok(nfo) => {
-                    nfo.update_movie(&mut movie);
-                    movie.nfofile = nfofile;
-                    if !movie.nfo_base.nfo_type.is_movie() {
-                        // If the NFO file says it's a <tvshow> or <episode>, bail out.
-                        return None;
-                    }
-                },
-                Err(e) => {
-                    // We failed. Will automatically try again as soon
-                    // as ctime or mtime of the file is updated.
-                    log::debug!("failed to read {}: {}", nfofile.as_ref().unwrap().fullpath, e);
-                },
-            }
+    // Then add all files.
+    for entry in &entries {
+        if only_nfo && !entry.ends_with(".nfo") {
             continue;
         }
-
-        if only_nfo {
-            continue;
-        }
-
-        // Image: banner, fanart, folder, poster etc
-        if IS_IMAGE.is_match(name) {
-            if ext == "tbn" && aux == "" {
-                aux = "poster";
+        if let Err(_) = mediadata.add_file(entry).await {
+            if entry.ends_with(".mp4") {
+                return None;
             }
-            if aux == "" {
-                aux = base;
-            }
-            let aspect = match aux {
-                "banner" | "fanart" | "poster" | "landscape" | "clearart" | "clearlogo" => aux,
-                _ => continue,
-            };
-            let _ =
-                Thumb::add(&mut movie.thumbs, &dirpath, name, coll, movie.id, aspect, None).await;
         }
-
-        // XXX TODO: subtitles srt/vtt
     }
+    mediadata.finalize();
 
-    Some(movie)
+    Some(mediadata.item)
 }

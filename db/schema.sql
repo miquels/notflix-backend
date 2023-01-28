@@ -28,7 +28,9 @@ CREATE TABLE mediaitems (
   deleted INTEGER DEFAULT 0 NOT NULL,
 
   -- title.
-  title TEXT,
+  title TEXT NOT NULL,
+  -- year
+  year INTEGER,
 
   -- nfo
   nfo_file JSON,

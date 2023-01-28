@@ -24,18 +24,25 @@ pub struct MediaItem {
     pub directory: Option<FileInfo>,
     /// Deleted?
     pub deleted: bool,
+
     /// Title.
     pub title: String,
+    /// Year (movies only)
+    pub year: Option<u32>,
+
     /// Nfo file.
     pub nfo_file: Option<FileInfo>,
     /// Info about this item from themoviedb / thetvdb, probably from nfo_file.
     pub nfo_info: Option<Nfo>,
+
     /// Thumbs, posters, fanart etc on the filesystem.
     pub thumbs: JVec<Thumb>,
     // pub subtitles: JVec<Subtitle>,
+
     /// Video file and info.
     pub video_file: Option<FileInfo>,
     pub video_info: Option<Video>,
+
     /// Episode specific.
     pub season: Option<u32>,
     /// Episode specific.
@@ -71,6 +78,7 @@ impl MediaItem {
                        directory AS "directory?: FileInfo",
                        deleted AS "deleted!: bool",
                        title AS "title!: String",
+                       year AS "year?: u32",
                        nfo_file AS "nfo_file?: FileInfo",
                        nfo_info AS "nfo_info?: Nfo",
                        thumbs AS "thumbs!: JVec<Thumb>",
@@ -102,6 +110,7 @@ impl MediaItem {
                     directory,
                     deleted,
                     title,
+                    year,
                     nfo_file,
                     nfo_info,
                     thumbs,
@@ -110,7 +119,7 @@ impl MediaItem {
                     season,
                     episode,
                     tvshow_id
-                ) VALUES("movie", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                ) VALUES("movie", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             self.id,
             self.collection_id,
             self.lastmodified,
@@ -118,6 +127,7 @@ impl MediaItem {
             self.directory,
             self.deleted,
             self.title,
+            self.year,
             self.nfo_file,
             self.nfo_info,
             self.thumbs,

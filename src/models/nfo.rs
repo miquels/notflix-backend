@@ -39,6 +39,7 @@ pub struct Nfo {
     #[serde(skip_serializing_if = "is_default")]
     #[oai(flatten, skip_serializing_if = "is_default")]
     pub directors: JVec<String>,
+
     // Detail NFO (Movie + TV Show)
     #[serde(skip_serializing_if = "is_default")]
     #[oai(skip_serializing_if = "is_default")]
@@ -57,15 +58,17 @@ pub struct Nfo {
     pub studios: JVec<String>,
     #[serde(skip_serializing_if = "is_default")]
     #[oai(skip_serializing_if = "is_default")]
-    pub premiered: Option<String>,
-    #[serde(skip_serializing_if = "is_default")]
-    #[oai(skip_serializing_if = "is_default")]
     pub mpaa: Option<String>,
 
     // Detail NFO (movie + episode)
     #[serde(skip_serializing_if = "is_default")]
     #[oai(skip_serializing_if = "is_default")]
     pub runtime: Option<u32>,
+
+    // detail NFO (movie)
+    #[serde(skip_serializing_if = "is_default")]
+    #[oai(skip_serializing_if = "is_default")]
+    pub premiered: Option<String>,
 
     // Detail NFO (tvshow)
     #[serde(skip_serializing_if = "is_default")]

@@ -6,14 +6,14 @@ use crate::collections::{Collection, CollectionType};
 use crate::models;
 
 // mod episode;
-// mod movie;
+mod movie;
 pub(crate) mod nfo;
 pub mod resource;
 pub mod scandirs;
 // mod tvshow;
 mod video;
 
-// pub use movie::scan_movie_dir;
+pub use movie::scan_movie_dir;
 pub use nfo::Nfo;
 // pub use tvshow::scan_tvshow_dir;
 pub use video::probe as probe_video;
@@ -24,12 +24,10 @@ pub async fn scan_mediaitem_dir(
     dbent: Option<Box<models::MediaItem>>,
     only_nfo: bool,
 ) -> Option<Box<models::MediaItem>> {
-    /*
     match coll.type_ {
-        CollectionType::Movie => scan_movie_dir(coll, dirname, dbent, only_nfo).await,
-        CollectionType::TVShow => scan_tvshow_dir(coll, dirname, dbent, only_nfo).await,
-    }*/
-    todo!()
+        CollectionType::Movies => scan_movie_dir(coll, dirname, dbent, only_nfo).await,
+        CollectionType::TVShows => todo!(),
+    }
 }
 
 // Helper macro.

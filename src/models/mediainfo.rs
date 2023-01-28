@@ -37,9 +37,7 @@ impl MediaInfoOverview {
         let mut items = Vec::new();
         while let Some(row) = rows.try_next().await? {
             let poster = row.thumbs.0.iter().find(|t| t.aspect == "poster").cloned();
-            if let Some(title) = row.title {
-                items.push(MediaInfoOverview { id: row.id, title, poster });
-            }
+            items.push(MediaInfoOverview { id: row.id, title: row.title, poster });
         }
 
         Ok(items)
@@ -74,9 +72,9 @@ impl MediaInfo {
         .await?;
 
         let m = some_or_return!(row, Ok(None));
-        Ok(m.title.map(|title| MediaInfo {
+        Ok(Some(MediaInfo {
             id: m.id,
-            title,
+            title: m.title,
             thumbs: m.thumbs,
             directory: m.directory,
         }))
