@@ -213,6 +213,13 @@ impl MediaData {
         // remove deleted thumbs from the list.
         self.item.thumbs.retain(|t| t.state != ThumbState::Deleted);
 
+        // update the type.
+        self.item.type_ = match self.item_type {
+            ItemType::Movie => "movies",
+            ItemType::TVShow => "tvshow",
+            ItemType::Episode => "episode",
+        }.to_string();
+
         self.updated
     }
 }

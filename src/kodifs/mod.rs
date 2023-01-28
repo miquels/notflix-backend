@@ -10,12 +10,12 @@ mod movie;
 pub(crate) mod nfo;
 pub mod resource;
 pub mod scandirs;
-// mod tvshow;
+mod tvshow;
 mod video;
 
 pub use movie::scan_movie_dir;
 pub use nfo::Nfo;
-// pub use tvshow::scan_tvshow_dir;
+pub use tvshow::scan_tvshow_dir;
 pub use video::probe as probe_video;
 
 pub async fn scan_mediaitem_dir(
@@ -26,7 +26,7 @@ pub async fn scan_mediaitem_dir(
 ) -> Option<Box<models::MediaItem>> {
     match coll.type_ {
         CollectionType::Movies => scan_movie_dir(coll, dirname, dbent, only_nfo).await,
-        CollectionType::TVShows => todo!(),
+        CollectionType::TVShows => scan_tvshow_dir(coll, dirname, dbent, only_nfo).await,
     }
 }
 
